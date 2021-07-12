@@ -1,5 +1,10 @@
 # weewx-airQ
-Service for WeeWX to retrieve data from the airQ device of Corant GmbH
+Service for WeeWX to retrieve air quality data from the airQ device of Corant GmbH
+
+PM<sub>1.0</sub>, PM<sub>2.5</sub>, PM<sub>10.0</sub>, TVOC, 
+CO, CO<sub>2</sub>, O<sub>2</sub>, O<sub>3</sub>, NO<sub>2</sub>, 
+H<sub>2</sub>S, SO<sub>2</sub>, noise, health index, performance index,
+temperature, humidity, dewpoint, air pressure
 
 ## Installation instructions:
 
@@ -81,7 +86,7 @@ are provided. The names are given as if no prefix is specified:
 * **so2**: SO<sub>2</sub> concentration
 * **airqNoise**: sound level
 * **airqTemp**: temperature
-* **TVOC**: volatile organic components concentration
+* **TVOC**: volatile organic compounds concentration
 * **airqUptime**: uptime of the device
 
 If a prefix is provided "airq" is replaced by the prefix. If the
@@ -89,5 +94,7 @@ name does not start by "airq" the prefix is prepended to the name.
 
 ## Links:
 
-* [Woellsdorf weather](https://www.woellsdorf-wetter.de)
-* [Web site of the airQ device](https://www.air-q.com)
+* [Web site of the airQ device](https://www.air-q.com) 
+* [airQ data sheet (german)](https://uploads-ssl.webflow.com/5bd9feee2fb42232fe1d0196/5f898b110a9e9fea8049fa29_air-Q_Specs_de_aktuell_2020-06-25.pdf)
+* [WeeWX homepage](http://weewx.com) - [WeeWX Wiki](https://github.com/weewx/weewx/wiki)
+* [Wöllsdorf weather conditions](https://www.woellsdorf-wetter.de)
