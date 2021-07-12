@@ -31,7 +31,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = 0.1
+VERSION = 0.2
 
 # imports for airQ
 import base64
@@ -58,6 +58,7 @@ if __name__ != '__main__':
     from weewx.engine import StdService
     import weewx.units
     import weewx.accum
+    import weeutil.weeutil
 else:
     # for standalone testing
     import sys
@@ -80,6 +81,10 @@ else:
             default_unit_label_dict = collections.ChainMap()
         class accum(object):
             accum_dict = collections.ChainMap()
+    class weeutil(object):
+        class weeutil(object):
+            def to_int(x):
+                return int(x)
     class Event(object):
         packet = { 'usUnits':16 }
         
@@ -88,7 +93,7 @@ try:
     # Test for new-style weewx logging by trying to import weeutil.logger
     import weeutil.logger
     import logging
-    log = logging.getLogger(__name__)
+    log = logging.getLogger("user.air-Q")
 
     def logdbg(msg):
         log.debug(msg)
@@ -104,7 +109,7 @@ except ImportError:
     import syslog
 
     def logmsg(level, msg):
-        syslog.syslog(level, 'airQ: %s' % msg)
+        syslog.syslog(level, 'user.air-Q: %s' % msg)
 
     def logdbg(msg):
         logmsg(syslog.LOG_DEBUG, msg)
@@ -171,33 +176,38 @@ def airQget(connection, page, passwd):
             reply = {'content':{}}
         reply['replystatus'] = _response.status
         reply['replyreason'] = _response.reason
+        reply['replyexception'] = ""
     except http.client.HTTPException as e:
         reply = {
             'replystatus': 400,
-            'replyreason': e,
+            'replyreason': "HTTPException %s" % e,
+            'replyexception': "HTTPException",
             'content': {}}
     except OSError as e:
         # device not found
         reply = {
             'replystatus': 404,
-            'replyreason': e,
+            'replyreason': "OSError %s" % e,
+            'replyexception': "OSError",
             'content': {}}
     return reply
 
 ##############################################################################
-#    Thread to retrieve data from the airQ device                            #
+#    Thread to retrieve data from the air-Q device                           #
 ##############################################################################
 
 class AirqThread(threading.Thread):
     """ retrieve data from airQ device """
     
-    def __init__(self, q, name, address, passwd):
+    def __init__(self, q, name, address, passwd, log_success, log_failure):
         """ initialize thread """
         super(AirqThread,self).__init__()
         self.queue = q
         self.name = name
         self.address = address
         self.passwd = passwd
+        self.log_success = log_success
+        self.log_failure = log_failure
         self.running = True
         
     def shutdown(self):
@@ -206,23 +216,32 @@ class AirqThread(threading.Thread):
         
     def run(self):
         """ run thread """
-        loginf("starting thread '%s', host '%s'" % (self.name,self.address))
+        loginf("thread '%s', host '%s': starting" % (self.name,self.address))
         connection = http.client.HTTPConnection(self.address)
         errsleep = 60
         while self.running:
             reply = airQget(connection, '/data', self.passwd)
             if reply['replystatus']==200:
                 if errsleep:
-                    loginf("thread %s, host %s: %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
+                    if self.log_success:
+                        loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
                     errsleep = 0
                 self.queue.put(reply['content'])
                 time.sleep(1.5)
             else:
-                logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
+                if self.log_failure:
+                    logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
+                # in case of repeated errors, close connection
+                if reply['replyexception']=="HTTPException" or errsleep>240: 
+                    connection.close()
+                # wait
                 time.sleep(errsleep)
+                # in case of repeated errors, re-open connection
+                if reply['replyexception']=="HTTPException" or errsleep>240: 
+                    connection = http.client.HTTPConnection(self.address)
                 if errsleep<300: errsleep+=60
         connection.close()
-        loginf("stopped thread '%s', host '%s'" % (self.name,self.address))
+        loginf("thread '%s', host '%s': stopped" % (self.name,self.address))
             
 
 ##############################################################################
@@ -279,25 +298,19 @@ class AirqService(StdService):
         
     def __init__(self, engine, config_dict):
         super(AirqService,self).__init__(engine, config_dict)
-        loginf("airQ %s" % VERSION)
+        loginf("air-Q %s" % VERSION)
+        # logging configuration
+        self.log_success = config_dict.get('log_success',True)
+        self.log_failure = config_dict.get('log_failure',True)
+        self.debug = weeutil.weeutil.to_int(config_dict.get('debug',0))
+        if self.debug>0:
+            self.log_success = True
+            self.log_failure = True
+        # dict of devices and threads
         self.threads={}
-        """
-        # unit g/m^2 for 'group_concentration'
-        weewx.units.conversionDict.setdefault('microgram_per_meter_cubed',{})
-        weewx.units.conversionDict.setdefault('gram_per_meter_cubed',{})
-        weewx.units.conversionDict['gram_per_meter_cubed']['microgram_per_meter_cubed'] = lambda x : x*1000
-        weewx.units.conversionDict['microgram_per_meter_cubed']['gram_per_meter_cubed'] = lambda x : x*0.001
-        weewx.units.default_unit_format_dict.setdefault('gram_per_meter_cubed',"%.1f")
-        weewx.units.default_unit_label_dict.setdefault('gram_per_meter_cubed',u" g/m³")
-        # unit ppb
-        weewx.units.conversionDict.setdefault('ppb',{})
-        weewx.units.conversionDict.setdefault('ppm',{})
-        weewx.units.conversionDict['ppb']['ppm'] = lambda x:x*0.001
-        weewx.units.conversionDict['ppm']['ppb'] = lambda x:x*1000
-        """
         # devices
+        ct = 0
         if 'airQ' in config_dict:
-            ct = 0
             for device in config_dict['airQ']:
                 if self._create_thread(device,
                     config_dict['airQ'][device].get('host'),
@@ -306,6 +319,10 @@ class AirqService(StdService):
                     ct+=1
             if ct>0:
                 self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
+        if ct==1:
+            loginf("1 air-Q device found")
+        else:
+            loginf("%s air-Q devices found" % ct)
 
     def _create_thread(self, thread_name, address, passwd, prefix):
         if address is None or address=='': 
@@ -316,7 +333,7 @@ class AirqService(StdService):
             return False
         self.threads[thread_name] = {}
         self.threads[thread_name]['queue'] = queue.Queue()
-        self.threads[thread_name]['thread'] = AirqThread(self.threads[thread_name]['queue'], thread_name, address, passwd)
+        self.threads[thread_name]['thread'] = AirqThread(self.threads[thread_name]['queue'], thread_name, address, passwd, self.log_success, self.log_failure)
         self.threads[thread_name]['prefix'] = prefix
         self.threads[thread_name]['thread'].start()
         loginf("device '%s' host address '%s'" % (thread_name,address))
