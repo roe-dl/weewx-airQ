@@ -60,7 +60,7 @@ specific prefix for the observation types of each device.
 
 ## Observation types:
 
-Dependend on hardware configuration the following observation types
+Dependent on hardware configuration the following observation types
 are provided. The names are given as if no prefix is specified:
 
 * **airqDeviceID**: (provided if included in `[StdWXCalculate]` only) 
@@ -96,7 +96,8 @@ are provided. The names are given as if no prefix is specified:
 * **so2**: SO<sub>2</sub> concentration
 * **airqNoise**: sound level
 * **airqTemp**: temperature
-* **TVOC**: volatile organic compounds concentration
+* **TVOC**: volatile organic compounds concentration (including Corona
+  viruses)
 * **airqUptime**: uptime of the device
 
 If a prefix is provided "airq" is replaced by the prefix. If the

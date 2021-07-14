@@ -15,7 +15,7 @@ class AirqInstaller(ExtensionInstaller):
             description='Service to retrieve data from the airQ device of Corant GmbH',
             author="Johanna Roedenbeck",
             author_email="",
-            data_services='user.airQ-corant.AirqService',
+            data_services='user.airQ_corant.AirqService',
             config={
               'airQ':{
                   'query_interval':'5.0',
@@ -25,5 +25,5 @@ class AirqInstaller(ExtensionInstaller):
                   '#prefix':'replace_me'
                   '#altitude': 'set_if_not_station_altitude'
                   }}},
-            files=[('bin/user', ['bin/user/airQ-corant.py'])]
+            files=[('bin/user', ['bin/user/airQ_corant.py'])]
             )
