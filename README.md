@@ -20,10 +20,16 @@ temperature, humidity, dewpoint, air pressure
 
    ```
    [airQ]
+
+       query_interval = 5.0 # this is the default, if option is missing
+
        [[first_device]]
            host = replace_me_by_host_address_or_IP
            password = replace_me
            #prefix = replace_me # optional
+           #altitude = value, unit # optional, default station altitude
+           #query_interval = value # optional, if different from general setting
+
        [[second_device]]
            ...
    ...
@@ -49,6 +55,8 @@ those observation types.
 
 More than one device can be used. That is done by configurating a
 specific prefix for the observation types of each device.
+
+<img src="dayPM.png" />
 
 ## Observation types:
 
@@ -83,6 +91,8 @@ are provided. The names are given as if no prefix is specified:
   of the appropriate size
 * **TypPS**: typical particle size
 * **airqPressure**: air pressure
+* **airqAltimeter** altimeter value (air pressure corrected by altitude, 
+  software calculated, not received from the device)
 * **so2**: SO<sub>2</sub> concentration
 * **airqNoise**: sound level
 * **airqTemp**: temperature

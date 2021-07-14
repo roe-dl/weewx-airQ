@@ -10,7 +10,7 @@ def loader():
 class AirqInstaller(ExtensionInstaller):
     def __init__(self):
         super(GTSInstaller, self).__init__(
-            version="0.2",
+            version="0.3",
             name='airQ',
             description='Service to retrieve data from the airQ device of Corant GmbH',
             author="Johanna Roedenbeck",
@@ -18,9 +18,12 @@ class AirqInstaller(ExtensionInstaller):
             data_services='user.airQ-corant.AirqService',
             config={
               'airQ':{
+                  'query_interval':'5.0',
+                  'first_device':{
                   'host':'replace_me',
                   'password':'replace_me',
                   '#prefix':'replace_me'
-                  }},
+                  '#altitude': 'set_if_not_station_altitude'
+                  }}},
             files=[('bin/user', ['bin/user/airQ-corant.py'])]
             )

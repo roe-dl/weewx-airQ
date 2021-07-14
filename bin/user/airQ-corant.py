@@ -21,17 +21,21 @@ Configuration in weewx.conf:
 
 [airQ]
 
+    query_interval = 5.0 # optional, default 5.0 seconds
+
     [[first_device]]
         host = replace_me_by_host_address_or_IP
         password = replace_me
         prefix = replace_me # optional
+        altitude = 123, meter # optional, default station altitude
+        query_interval = 5.0 # optional, default 5.0 seconds
         
     [[second_device]]
         ...
 
 """
 
-VERSION = 0.2
+VERSION = 0.3
 
 # imports for airQ
 import base64
@@ -59,6 +63,7 @@ if __name__ != '__main__':
     import weewx.units
     import weewx.accum
     import weeutil.weeutil
+    from weewx.wxformulas import altimeter_pressure_Metric
 else:
     # for standalone testing
     import sys
@@ -75,6 +80,8 @@ else:
         class units(object):
             def convertStd(p1, p2):
                 return p1
+            def convert(p1, p2):
+                return (p1[0],p2,p1[2])
             obs_group_dict = collections.ChainMap()
             conversionDict = collections.ChainMap()
             default_unit_format_dict = collections.ChainMap()
@@ -87,6 +94,9 @@ else:
                 return int(x)
     class Event(object):
         packet = { 'usUnits':16 }
+    class Engine(object):
+        class stn_info(object):
+            altitude_vt = (0,'meter','group_altitude')
         
 
 try:
@@ -163,9 +173,10 @@ def airQreply(htmlreply, passwd):
     # reply converted to python dict with 'content' decoded
     return _rtn
 
-def airQget(connection, page, passwd):
+def airQget(host, page, passwd):
     """ get page from airQ """
     try:
+        connection = http.client.HTTPConnection(host)
         connection.request('GET', page)
         _response = connection.getresponse()
         if _response.status==200:
@@ -179,17 +190,24 @@ def airQget(connection, page, passwd):
         reply['replyexception'] = ""
     except http.client.HTTPException as e:
         reply = {
-            'replystatus': 400,
+            'replystatus': 503,
             'replyreason': "HTTPException %s" % e,
             'replyexception': "HTTPException",
             'content': {}}
     except OSError as e:
         # device not found
+        # connection reset
+        if e.__class__.__name__ in ['ConnectionError','ConnectionResetError','ConnectionAbortedError','ConnectionRefusedError']:
+            __status = 503
+        else:
+            __status = 404
         reply = {
-            'replystatus': 404,
-            'replyreason': "OSError %s" % e,
-            'replyexception': "OSError",
+            'replystatus': __status,
+            'replyreason': "OSError %s - %s" % (e.__class__.__name__,e),
+            'replyexception': e.__class__.__name__,
             'content': {}}
+    finally:
+        connection.close()
     return reply
 
 ##############################################################################
@@ -199,7 +217,7 @@ def airQget(connection, page, passwd):
 class AirqThread(threading.Thread):
     """ retrieve data from airQ device """
     
-    def __init__(self, q, name, address, passwd, log_success, log_failure):
+    def __init__(self, q, name, address, passwd, log_success, log_failure, query_interval):
         """ initialize thread """
         super(AirqThread,self).__init__()
         self.queue = q
@@ -208,7 +226,9 @@ class AirqThread(threading.Thread):
         self.passwd = passwd
         self.log_success = log_success
         self.log_failure = log_failure
+        self.query_interval = query_interval
         self.running = True
+        loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
         
     def shutdown(self):
         """ stop thread """
@@ -217,32 +237,24 @@ class AirqThread(threading.Thread):
     def run(self):
         """ run thread """
         loginf("thread '%s', host '%s': starting" % (self.name,self.address))
-        connection = http.client.HTTPConnection(self.address)
         errsleep = 60
         while self.running:
-            reply = airQget(connection, '/data', self.passwd)
+            reply = airQget(self.address, '/data', self.passwd)
             if reply['replystatus']==200:
                 if errsleep:
                     if self.log_success:
                         loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
                     errsleep = 0
                 self.queue.put(reply['content'])
-                time.sleep(1.5)
+                time.sleep(self.query_interval)
             else:
                 if self.log_failure:
                     logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
-                # in case of repeated errors, close connection
-                if reply['replyexception']=="HTTPException" or errsleep>240: 
-                    connection.close()
                 # wait
                 time.sleep(errsleep)
-                # in case of repeated errors, re-open connection
-                if reply['replyexception']=="HTTPException" or errsleep>240: 
-                    connection = http.client.HTTPConnection(self.address)
                 if errsleep<300: errsleep+=60
-        connection.close()
         loginf("thread '%s', host '%s': stopped" % (self.name,self.address))
-            
+        
 
 ##############################################################################
 #   WeeWX service for airQ device                                            #
@@ -250,6 +262,7 @@ class AirqThread(threading.Thread):
 
 class AirqService(StdService):
 
+    # observation types
     AIRQ_DATA = {
         'DeviceID':    ('airqDeviceID',    None,None,lambda x:x),
         'Status':      ('airqStatus',      None,None,lambda x:x),
@@ -261,6 +274,8 @@ class AirqService(StdService):
         'humidity_abs':('airqHumAbs',      'gram_per_meter_cubed', 'group_concentration', lambda x:float(x[0])),
         'dewpt':       ('airqDewpoint',    'degree_C',                  'group_temperature',lambda x:float(x[0])),
         'pressure':    ('airqPressure',    'mbar',                      'group_pressure',lambda x:float(x[0])),
+        'altimeter':   ('airqAltimeter',   'mbar',                      'group_pressure',lambda x:float(x[0])),
+        'barometer':   ('airqBarometer',   'mbar',                      'group_pressure',lambda x:float(x[0])),
         'co':          ('co',              'milligram_per_meter_cubed', 'group_concentration',lambda x:x[0]),
         'co2':         ('co2',             'ppm',                       'group_fraction',lambda x:x[0]),
         'h2s':         ('h2s',             "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
@@ -286,11 +301,13 @@ class AirqService(StdService):
         'door_event':  ('airqDoorEvent',   None, None, lambda x:int(x))
         }
         
+    # which readings are to accumulate calculating average
     AVG_GROUPS = [
         'group_temperature',
         'group_concentration',
         'group_fraction']
         
+    # which readings are non-numeric
     ACCUM_LAST = [
         'DeviceID',
         'Status',
@@ -312,10 +329,23 @@ class AirqService(StdService):
         ct = 0
         if 'airQ' in config_dict:
             for device in config_dict['airQ']:
+                # altitude to calculate altimeter value 
+                if 'altitude' in config_dict['airQ'][device]:
+                    __altitude = config_dict['airQ'][device]['altitude']
+                    if len(__altitude)==3:
+                        __altitude = weewx.units.ValueTuple(__altitude[0],__altitude[1],__altitude[2])
+                    else:
+                        __altitude = weewx.units.ValueTuple(__altitude[0],__altitdue[1],'group_altitude')
+                else:
+                    __altitude = engine.stn_info.altitude_vt
+                __altitude = weewx.units.convert(__altitude,'meter')[0]
+                # create thread
                 if self._create_thread(device,
                     config_dict['airQ'][device].get('host'),
                     config_dict['airQ'][device].get('password'),
-                    config_dict['airQ'][device].get('prefix')):
+                    config_dict['airQ'][device].get('prefix'),
+                    __altitude,
+                    config_dict['airQ'][device].get('query_interval',config_dict['airQ'].get('query_interval',5.0))):
                     ct+=1
             if ct>0:
                 self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
@@ -324,7 +354,7 @@ class AirqService(StdService):
         else:
             loginf("%s air-Q devices found" % ct)
 
-    def _create_thread(self, thread_name, address, passwd, prefix):
+    def _create_thread(self, thread_name, address, passwd, prefix, altitude, query_interval):
         if address is None or address=='': 
             logerr("device '%s': not host address defined" % thread_name)
             return False
@@ -333,10 +363,11 @@ class AirqService(StdService):
             return False
         self.threads[thread_name] = {}
         self.threads[thread_name]['queue'] = queue.Queue()
-        self.threads[thread_name]['thread'] = AirqThread(self.threads[thread_name]['queue'], thread_name, address, passwd, self.log_success, self.log_failure)
+        self.threads[thread_name]['thread'] = AirqThread(self.threads[thread_name]['queue'], thread_name, address, passwd, self.log_success, self.log_failure, query_interval)
         self.threads[thread_name]['prefix'] = prefix
+        self.threads[thread_name]['altitude'] = altitude
         self.threads[thread_name]['thread'].start()
-        loginf("device '%s' host address '%s'" % (thread_name,address))
+        loginf("device '%s' host address '%s' prefix '%s' query interval %.1f s altitude %.0f m" % (thread_name,address,prefix,query_interval,altitude))
         # set accumulators for non-numeric observation types
         _accum = {}
         for ii in self.ACCUM_LAST:
@@ -418,6 +449,9 @@ class AirqService(StdService):
             # calculate average
             for jj in avg_sum:
                 data.update({jj:avg_sum[jj]/avg_ct[jj]})
+            # calculate altimeter value from pressure reading
+            if 'pressure' in data and 'altimeter' not in data:
+                data['altimeter'] = altimeter_pressure_Metric(data['pressure'],self.threads[ii]['altitude'])
             # convert airQ to WeeWX observation type names and
             # values to archive unit system
             data = self.airq_to_weewx(data, self.threads[ii].get('prefix'), event.packet.get('usUnits'))
@@ -494,7 +528,7 @@ if __name__ == '__main__':
                     }
                 }
             }
-        srv = AirqService({},CONF)
+        srv = AirqService(Engine(),CONF)
         print("weewx.accum.accum_dict = ")
         print(weewx.accum.accum_dict)
         print("weewx.units.conversionDict =")

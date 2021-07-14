@@ -1,2 +1,11 @@
-11jul2021
+0.1 11jul2021
 * initial version
+0.2 12jul2021
+* improved error handling
+* bug fixes
+0.3 14jul2021
+* bug fixes
+* TCP connection re-opened for each query
+* option "query_interval"
+* option "altitude" 
+* calculation of altimeter value from pressure reading
