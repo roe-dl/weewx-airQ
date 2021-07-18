@@ -1,12 +1,15 @@
 #!/usr/bin/python3
-# Copyright (C) 2021 Johanna Roedenbeck
+#
 # WeeWX service to read data from the airQ device 
+#
+# Copyright (C) 2021 Johanna Roedenbeck
+# airQ API Copyright (C) Corant GmbH
 
 """
 
 Hardware: https://www.air-q.com
 
-Science option ist required.
+Science option is required.
 
 
 Most of the the observation types provided by the airQ device are
@@ -35,7 +38,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = 0.3
+VERSION = 0.4
 
 # imports for airQ
 import base64
@@ -58,7 +61,7 @@ import threading
 import time
 if __name__ != '__main__':
     # for use as service within WeeWX
-    import weewx
+    import weewx # WeeWX-specific exceptions, class Event
     from weewx.engine import StdService
     import weewx.units
     import weewx.accum
@@ -103,7 +106,7 @@ try:
     # Test for new-style weewx logging by trying to import weeutil.logger
     import weeutil.logger
     import logging
-    log = logging.getLogger("user.air-Q")
+    log = logging.getLogger("user.airQ")
 
     def logdbg(msg):
         log.debug(msg)
@@ -119,7 +122,7 @@ except ImportError:
     import syslog
 
     def logmsg(level, msg):
-        syslog.syslog(level, 'user.air-Q: %s' % msg)
+        syslog.syslog(level, 'user.airQ: %s' % msg)
 
     def logdbg(msg):
         logmsg(syslog.LOG_DEBUG, msg)
@@ -328,7 +331,7 @@ class AirqService(StdService):
         # devices
         ct = 0
         if 'airQ' in config_dict:
-            for device in config_dict['airQ']:
+            for device in config_dict['airQ'].sections:
                 # altitude to calculate altimeter value 
                 if 'altitude' in config_dict['airQ'][device]:
                     __altitude = config_dict['airQ'][device]['altitude']
@@ -361,13 +364,25 @@ class AirqService(StdService):
         if passwd is None or passwd=='':
             logerr("device '%s': no password defined" % thread_name)
             return False
+        # report config data from weewx.conf to syslog
+        loginf("device '%s' host address '%s' prefix '%s' query interval %.1f s altitude %.0f m" % (thread_name,address,prefix,query_interval,altitude))
+        # get config data out of device and log
+        try:
+            devconf = airQget(address,'/config',passwd)
+            devconf = devconf.get('content',{})
+        except:
+            logerr("device '%s': could not read config out of the device" % thread_name)
+            devconf = {}
+        loginf("device '%s' device id: %s" % (thread_name,devconf.get('id','unknown')))
+        loginf("device '%s' sensors: %s" % (thread_name,devconf.get('sensors','unkown')))
+        loginf("device '%s' concentration units config: %s" % (thread_name,'ppb&ppm' if devconf.get('ppb&ppm',False) else 'µg/m^3'))
+        # initialize thread
         self.threads[thread_name] = {}
         self.threads[thread_name]['queue'] = queue.Queue()
         self.threads[thread_name]['thread'] = AirqThread(self.threads[thread_name]['queue'], thread_name, address, passwd, self.log_success, self.log_failure, query_interval)
         self.threads[thread_name]['prefix'] = prefix
         self.threads[thread_name]['altitude'] = altitude
-        self.threads[thread_name]['thread'].start()
-        loginf("device '%s' host address '%s' prefix '%s' query interval %.1f s altitude %.0f m" % (thread_name,address,prefix,query_interval,altitude))
+        self.threads[thread_name]['ppb&ppm'] = devconf.get('ppb&ppm',False)
         # set accumulators for non-numeric observation types
         _accum = {}
         for ii in self.ACCUM_LAST:
@@ -382,6 +397,8 @@ class AirqService(StdService):
             _obs_conf = self.AIRQ_DATA[ii]
             if _obs_conf and _obs_conf[2] is not None:
                 weewx.units.obs_group_dict.setdefault(self.obstype_with_prefix(_obs_conf[0],prefix),_obs_conf[2])
+        # start thread
+        self.threads[thread_name]['thread'].start()
         return True
             
     def shutdown(self):

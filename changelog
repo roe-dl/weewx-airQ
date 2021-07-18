@@ -9,3 +9,7 @@
 * option "query_interval"
 * option "altitude" 
 * calculation of altimeter value from pressure reading
+0.4 18jul2021
+* configuration tool 'airq_conf'
+* bug fixes
+* log some config data when WeeWX is starting

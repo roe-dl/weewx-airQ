@@ -6,6 +6,29 @@ CO, CO<sub>2</sub>, O<sub>2</sub>, O<sub>3</sub>, NO<sub>2</sub>,
 H<sub>2</sub>S, SO<sub>2</sub>, noise, health index, performance index,
 temperature, humidity, dewpoint, air pressure
 
+## Prerequisites
+
+The following Python modules are necessary to use this extension:
+* base64
+* Cryptodome.Cipher
+* http.client
+* json
+* threading
+
+It depends on the distribution you use whether those modules are installed
+by default. For Debian this installation should do it:
+```
+sudo apt-get install python3-cryptodome
+```
+
+User Hartmut was successful with that:
+```
+sudo apt-get install build-essential python3-dev 
+pip3 install pycryptodomex 
+python3 -m Cryptodome.SelfTest 
+```
+
+
 ## Installation instructions:
 
 1) download
@@ -16,7 +39,7 @@ temperature, humidity, dewpoint, air pressure
 
    sudo wee_extension --install weewx-airQ.zip
 
-3) check configuration in weewx.conf
+3) edit configuration in weewx.conf
 
    ```
    [airQ]
@@ -36,7 +59,7 @@ temperature, humidity, dewpoint, air pressure
    [Engine]
        [[Services]]
            ...
-           data_services = ... ,user.airQ-corant.AirqService
+           data_services = ... ,user.airQ_corant.AirqService
    ```
    
 5) restart weewx
@@ -57,6 +80,19 @@ More than one device can be used. That is done by configurating a
 specific prefix for the observation types of each device.
 
 <img src="dayPM.png" />
+
+### Prefix
+
+If you have more than one airQ device, you need different names of the 
+observation types for each of them. That's the prefix for. 
+Imagine there are 3 airQ devices, one outside, one in the bedroom and 
+one in the living room. Your could configure the outside device without 
+prefix to put "co", "co2", "no2", "noise", "o3", "pm1_0", "pm2_5", 
+"pm10_0", and "so2" into the predefined columns of the WeeWX database. 
+For the bedroom device you could set "prefix = bedroom". So you get 
+"bedroom_co", "bedroom_co2" etc. for that device. And for the living 
+room device you could set "prefix = livingroom". So you get 
+"livingroom_co", "livingroom_co2", etc. for that. 
 
 ## Observation types:
 
@@ -102,6 +138,54 @@ are provided. The names are given as if no prefix is specified:
 
 If a prefix is provided "airq" is replaced by the prefix. If the
 name does not start by "airq" the prefix is prepended to the name.
+
+## Configuration tool `airq_conf`
+
+### General options
+
+* `--device=DEVICE`: airQ device to set/get configuration for
+* `--config=CONFIG_FILE`: use configuration file CONFIG_FILE. Default
+  according to the way of WeeWX installation
+* `--binding=BINDING_NAME`: Use binding BINDING_NAME. Default is `wx_binding`.
+
+### General functions
+
+* airq_conf --help
+  display usage instructions
+* airq_conf --device=DEVICE --print-config
+  read the device configuration and display
+
+### Add or drop columns to/from the database
+
+The `wee_database` utility allows adding columns to the database one by one
+only. As the airQ device provides a lot of additional observation types,
+this is quite uncomfortable. The `airq_conf` tool provides the possibility
+to add all the additional columns in one step. It regards the `prefix`
+configuration option. By using the original WeeWX
+functions for that, it should be safe. Nevertheless, backups are alsways a
+good idea. And stop WeeWX for that.
+
+**CAUTION:** Stop WeeWX and make a backup of the database before using this functions.
+
+* airq_conf --device=DEVICE --add-columns
+  add the necessary columns to the database
+* airq_conf --device=DEVICE --drop-columns
+  drop the columns from the database
+
+### Set configuration parameters in the airQ device
+
+Those functions change configuration settings within the airQ device.
+
+* airq_conf --device=DEVICE --set-location=station
+  set the location of the airQ device to the station location
+* airq_conf --device=DEVICE --set-location=LATITUDE,LOGITUDE
+  set the location of the airQ device to latitude and longitude provided
+* airq_conf --device=DEVICE --set-roomsize=HEIGHT,AREA
+  set the room size data
+* airq_conf [--device=DEVICE] --set-ntp=NTP_SERVER
+  set the NTP server
+* airq_conf [--device=DEVICE] --set-ntp=de
+  set the NTP server to the official german server of PTB.
 
 ## Links:
 
