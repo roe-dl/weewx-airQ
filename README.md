@@ -150,9 +150,9 @@ name does not start by "airq" the prefix is prepended to the name.
 
 ### General functions
 
-* airq_conf --help
+* `airq_conf --help`:
   display usage instructions
-* airq_conf --device=DEVICE --print-config
+* `airq_conf --device=DEVICE --print-config`:
   read the device configuration and display
 
 ### Add or drop columns to/from the database
@@ -167,24 +167,24 @@ good idea. And stop WeeWX for that.
 
 **CAUTION:** Stop WeeWX and make a backup of the database before using this functions.
 
-* airq_conf --device=DEVICE --add-columns
+* `airq_conf --device=DEVICE --add-columns`:
   add the necessary columns to the database
-* airq_conf --device=DEVICE --drop-columns
+* `airq_conf --device=DEVICE --drop-columns`:
   drop the columns from the database
 
 ### Set configuration parameters in the airQ device
 
 Those functions change configuration settings within the airQ device.
 
-* airq_conf --device=DEVICE --set-location=station
+* `airq_conf --device=DEVICE --set-location=station`:
   set the location of the airQ device to the station location
-* airq_conf --device=DEVICE --set-location=LATITUDE,LOGITUDE
+* `airq_conf --device=DEVICE --set-location=LATITUDE,LOGITUDE`:
   set the location of the airQ device to latitude and longitude provided
-* airq_conf --device=DEVICE --set-roomsize=HEIGHT,AREA
+* `airq_conf --device=DEVICE --set-roomsize=HEIGHT,AREA`
   set the room size data
-* airq_conf [--device=DEVICE] --set-ntp=NTP_SERVER
+* `airq_conf [--device=DEVICE] --set-ntp=NTP_SERVER`
   set the NTP server
-* airq_conf [--device=DEVICE] --set-ntp=de
+* `airq_conf [--device=DEVICE] --set-ntp=de`
   set the NTP server to the official german server of PTB.
 
 ## Links:
