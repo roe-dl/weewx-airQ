@@ -140,13 +140,20 @@ ACCUM_LAST_DICT = { 'accumulator':'firstlast','extractor':'last' }
 #   add additional units needed for airQ                                     #
 ##############################################################################
 
-# unit g/m^2 for 'group_concentration'
+# unit g/m^2 and mg/m^2 for 'group_concentration'
 weewx.units.conversionDict.setdefault('microgram_per_meter_cubed',{})
+weewx.units.conversionDict.setdefault('milligram_per_meter_cubed',{})
 weewx.units.conversionDict.setdefault('gram_per_meter_cubed',{})
-weewx.units.conversionDict['gram_per_meter_cubed']['microgram_per_meter_cubed'] = lambda x : x*1000
-weewx.units.conversionDict['microgram_per_meter_cubed']['gram_per_meter_cubed'] = lambda x : x*0.001
+weewx.units.conversionDict['gram_per_meter_cubed']['microgram_per_meter_cubed'] = lambda x : x*1000000
+weewx.units.conversionDict['milligram_per_meter_cubed']['microgram_per_meter_cubed'] = lambda x : x*1000
+weewx.units.conversionDict['microgram_per_meter_cubed']['gram_per_meter_cubed'] = lambda x : x*0.000001
+weewx.units.conversionDict['microgram_per_meter_cubed']['milligram_per_meter_cubed'] = lambda x : x*0.001
+weewx.units.conversionDict['milligram_per_meter_cubed']['gram_per_meter_cubed'] = lambda x : x*0.001
+weewx.units.conversionDict['gram_per_meter_cubed']['milligram_per_meter_cubed'] = lambda x : x*1000
 weewx.units.default_unit_format_dict.setdefault('gram_per_meter_cubed',"%.1f")
 weewx.units.default_unit_label_dict.setdefault('gram_per_meter_cubed',u" g/m³")
+weewx.units.default_unit_format_dict.setdefault('milligram_per_meter_cubed',"%.1f")
+weewx.units.default_unit_label_dict.setdefault('milligram_per_meter_cubed',u" mg/m³")
 # unit ppb for 'TVOC'
 weewx.units.conversionDict.setdefault('ppb',{})
 weewx.units.conversionDict.setdefault('ppm',{})
