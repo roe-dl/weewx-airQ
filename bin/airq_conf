@@ -1,0 +1,7 @@
+#!/usr/bin/python3
+
+import user.airq_conf
+
+if __name__ == "__main__":
+    user.airq_conf.main()
+
