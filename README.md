@@ -71,28 +71,62 @@ python3 -m Cryptodome.SelfTest
 
 ## Usage:
 
-Most of the the observation types provided by the airQ device are
-predefined within WeeWX. If no special configuration besides host
-address and password is provided the measured values are stored to
-those observation types. 
+Using this extension you get the readings out of the airQ measuring
+device and can
 
-More than one device can be used. That is done by configurating a
-specific prefix for the observation types of each device.
-
-<img src="dayPM.png" />
+* save them to the database
+* display them using tags in skins
+* display them in graphs
 
 ### Prefix
+
+Most of the the observation types provided by the airQ device are
+predefined within WeeWX. If no special configuration besides host
+address and password is provided the readings are stored to
+those observation types. 
 
 If you have more than one airQ device, you need different names of the 
 observation types for each of them. That's the prefix for. 
 Imagine there are 3 airQ devices, one outside, one in the bedroom and 
 one in the living room. Your could configure the outside device without 
-prefix to put "co", "co2", "no2", "noise", "o3", "pm1_0", "pm2_5", 
-"pm10_0", and "so2" into the predefined columns of the WeeWX database. 
-For the bedroom device you could set "prefix = bedroom". So you get 
-"bedroom_co", "bedroom_co2" etc. for that device. And for the living 
-room device you could set "prefix = livingroom". So you get 
-"livingroom_co", "livingroom_co2", etc. for that. 
+prefix to put `co`, `co2`, `no2`, `noise`, `o3`, `pm1_0`, `pm2_5`, 
+`pm10_0`, and `so2` into the predefined columns of the WeeWX database. 
+For the bedroom device you could set `prefix = bedroom`. So you get 
+`bedroom_co`, `bedroom_co2` etc. for that device. And for the living 
+room device you could set `prefix = livingroom`. So you get 
+`livingroom_co`, `livingroom_co2`, etc. for that. 
+
+### Adding additional columns to the database
+
+This extension comes with a special configuration tool called `airq_conf`.
+The tool is based on the WeeWX `wee_database` tool and provides means
+to add the necessary columns according to the prefix setting to the
+database or drop them from it. See below for details.
+
+### Display values (CheetahGenerator)
+
+The observation types described below can be used for tags as described
+in the [WeeWX Customization
+guide](http://weewx.com/docs/customizing.htm#Tags).
+
+Example: `$current.TVOC`
+
+### Diagrams (ImageGenerator)
+
+To create diagrams you need to include additional sections into the 
+[ImageGenerator] section of skin.conf. This is an example:
+
+```
+        [[[dayPM]]]
+            [[[[pm1_0]]]]
+            [[[[pm2_5]]]]
+            [[[[pm10_0]]]]
+```
+
+The result is as follows:
+
+<img src="dayPM.png" />
+
 
 ## Observation types:
 
