@@ -148,7 +148,7 @@ name does not start by "airq" the prefix is prepended to the name.
   according to the way of WeeWX installation
 * `--binding=BINDING_NAME`: Use binding BINDING_NAME. Default is `wx_binding`.
 
-### General functions
+### General commands
 
 * `airq_conf --help`:
   display usage instructions
@@ -165,7 +165,8 @@ configuration option. By using the original WeeWX
 functions for that, it should be safe. Nevertheless, backups are alsways a
 good idea. And stop WeeWX for that.
 
-**CAUTION:** Stop WeeWX and make a backup of the database before using this functions.
+**CAUTION:** Stop WeeWX and make a backup of the database before using these
+commands.
 
 * `airq_conf --device=DEVICE --add-columns`:
   add the necessary columns to the database
@@ -174,17 +175,17 @@ good idea. And stop WeeWX for that.
 
 ### Set configuration parameters in the airQ device
 
-Those functions change configuration settings within the airQ device.
+Those commands change configuration settings within the airQ device.
 
 * `airq_conf --device=DEVICE --set-location=station`:
   set the location of the airQ device to the station location
 * `airq_conf --device=DEVICE --set-location=LATITUDE,LOGITUDE`:
   set the location of the airQ device to latitude and longitude provided
-* `airq_conf --device=DEVICE --set-roomsize=HEIGHT,AREA`
+* `airq_conf --device=DEVICE --set-roomsize=HEIGHT,AREA`:
   set the room size data
-* `airq_conf [--device=DEVICE] --set-ntp=NTP_SERVER`
+* `airq_conf [--device=DEVICE] --set-ntp=NTP_SERVER`:
   set the NTP server
-* `airq_conf [--device=DEVICE] --set-ntp=de`
+* `airq_conf [--device=DEVICE] --set-ntp=de`:
   set the NTP server to the official german server of PTB.
 
 ## Links:

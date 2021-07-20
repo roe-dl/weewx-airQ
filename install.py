@@ -25,6 +25,6 @@ class AirqInstaller(ExtensionInstaller):
                   '#prefix':'replace_me',
                   '#altitude': 'set_if_not_station_altitude'
                   }}},
-            files=[('bin/user', ['bin/user/airQ_corant.py'],
-                   ('bin',      ['bin/airq_conf.py'])]
+            files=[('bin/user', ['bin/user/airQ_corant.py','bin/user/airq_conf.py'],
+                   ('bin',      ['bin/airq_conf'])]
             )
