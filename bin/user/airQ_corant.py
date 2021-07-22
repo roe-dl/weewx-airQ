@@ -38,7 +38,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = 0.4
+VERSION = 0.5
 
 # imports for airQ
 import base64
@@ -66,7 +66,7 @@ if __name__ != '__main__':
     import weewx.units
     import weewx.accum
     import weeutil.weeutil
-    from weewx.wxformulas import altimeter_pressure_Metric
+    from weewx.wxformulas import altimeter_pressure_Metric,sealevel_pressure_Metric
 else:
     # for standalone testing
     import sys
@@ -248,6 +248,7 @@ class AirqThread(threading.Thread):
         """ run thread """
         loginf("thread '%s', host '%s': starting" % (self.name,self.address))
         errsleep = 60
+        laststatuschange = time.time()
         while self.running:
             reply = airQget(self.address, '/data', self.passwd)
             if reply['replystatus']==200:
@@ -255,11 +256,13 @@ class AirqThread(threading.Thread):
                     if self.log_success:
                         loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
                     errsleep = 0
+                    laststatuschange = time.time()
                 self.queue.put(reply['content'])
                 time.sleep(self.query_interval)
             else:
+                if errsleep==0: laststatuschange = time.time()
                 if self.log_failure:
-                    logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
+                    logerr("thread '%s', host '%s': %s - %s - %.0f s since last success" % (self.name,self.address,reply['replystatus'],reply['replyreason'],time.time()-laststatuschange))
                 # wait
                 time.sleep(errsleep)
                 if errsleep<300: errsleep+=60
@@ -381,6 +384,7 @@ class AirqService(StdService):
             logerr("device '%s': could not read config out of the device" % thread_name)
             devconf = {}
         loginf("device '%s' device id: %s" % (thread_name,devconf.get('id','unknown')))
+        loginf("device '%s' firmware version: %s" % (thread_name,devconf.get('air-Q-Software-Version','unknown')))
         loginf("device '%s' sensors: %s" % (thread_name,devconf.get('sensors','unkown')))
         loginf("device '%s' concentration units config: %s" % (thread_name,'ppb&ppm' if devconf.get('ppb&ppm',False) else 'µg/m^3'))
         # initialize thread
@@ -389,7 +393,14 @@ class AirqService(StdService):
         self.threads[thread_name]['thread'] = AirqThread(self.threads[thread_name]['queue'], thread_name, address, passwd, self.log_success, self.log_failure, query_interval)
         self.threads[thread_name]['prefix'] = prefix
         self.threads[thread_name]['altitude'] = altitude
+        self.threads[thread_name]['QFF_temperature_source'] = 'outTemp'
         self.threads[thread_name]['ppb&ppm'] = devconf.get('ppb&ppm',False)
+        self.threads[thread_name]['RoomType'] = devconf.get('RoomType')
+        # log settings for calculating the barometer value
+        if self.isDeviceOutdoor(thread_name):
+            loginf("device '%s' QFF calculation temperature source: airQ temperature reading" % thread_name)
+        else:
+            loginf("device '%s' QFF calculation temperature source: %s" % (thread_name,self.threads[thread_name]['QFF_temperature_source']))
         # set accumulators for non-numeric observation types
         _accum = {}
         for ii in self.ACCUM_LAST:
@@ -475,7 +486,35 @@ class AirqService(StdService):
                 data.update({jj:avg_sum[jj]/avg_ct[jj]})
             # calculate altimeter value from pressure reading
             if 'pressure' in data and 'altimeter' not in data:
-                data['altimeter'] = altimeter_pressure_Metric(data['pressure'],self.threads[ii]['altitude'])
+                try:
+                    data['altimeter'] = altimeter_pressure_Metric(data['pressure'],self.threads[ii]['altitude'])
+                except (ValueError,TypeError,IndexError,KeyError):
+                    pass
+            # calculate barometer value from pressure and temperature reading
+            if not self.isDeviceOutdoor(ii) and self.threads[ii]['QFF_temperature_source'] in event.packet:
+                # As outTemp is not within every LOOP packet and airQ
+                # readings are not available for every LOOP packet,
+                # remember the outTemp reading for the next 5 minutes.
+                # Only necessary if 'RoomType' is indoor.
+                self.threads[ii]['outTemp_vt'] = weewx.units.as_value_tuple(
+                    event.packet,
+                    self.threads[ii]['QFF_temperature_source'])
+                self.threads[ii]['outTempValid'] = time.time()+300
+            if 'pressure' in data and 'barometer' not in data:
+                try:
+                    if self.isDeviceOutdoor(ii):
+                        # if the airQ device is located outdoor, use the
+                        # temperature measured by the device
+                        t_C = data['temperature']
+                    else:
+                        # if the airQ device is located indoor, use the
+                        # observation type 'outTemp'
+                        if time.time()>self.threads[ii]['outTempValid']:
+                            raise ValueError("no recent outTemp reading")
+                        t_C = weewx.units.convert(self.threads[ii]['outTemp_vt'],'degree_C')[0]
+                    data['barometer'] = sealevel_pressure_Metric(data['pressure'],self.threads[ii]['altitude'],t_C)
+                except (ValueError,TypeError,IndexError,KeyError):
+                    pass
             # convert airQ to WeeWX observation type names and
             # values to archive unit system
             data = self.airq_to_weewx(data, self.threads[ii].get('prefix'), event.packet.get('usUnits'))
@@ -485,23 +524,15 @@ class AirqService(StdService):
             # update loop packet with airQ data
             event.packet.update(data)
 
-    '''
-    @staticmethod
-    def get_airq_value(val):
-        """ get the real value out of the json value """
-        try:
-            iter(val)
-            if len(val)==2 and not isinstance(val,six.string_types):
-                return val[0]
-        except TypeError:
-            pass
-        return val
-    '''    
-    
     @staticmethod
     def obstype_with_prefix(obs_type,prefix):
         """ prepend prefix if given """
         return prefix + '_' + obs_type.replace('airq','') if prefix else obs_type
+    
+    def isDeviceOutdoor(self, thread):
+        """ check if the airQ device is located outdoor 
+            according to its configuration """
+        return self.threads[thread]['RoomType']=='outdoor'
     
     def airq_to_weewx(self, data, prefix, usUnits):
         """ convert field names """

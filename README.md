@@ -163,6 +163,9 @@ are provided. The names are given as if no prefix is specified:
 * **airqPressure**: air pressure
 * **airqAltimeter** altimeter value (air pressure corrected by altitude, 
   software calculated, not received from the device)
+* **airqBarometer**: barometer value (air pressure corrected by altitude
+  and outside temperature, software calculated, not received from the
+  device)
 * **so2**: SO<sub>2</sub> concentration
 * **airqNoise**: sound level
 * **airqTemp**: temperature
@@ -224,7 +227,7 @@ Those commands change configuration settings within the airQ device.
 
 ## Links:
 
-* [Web site of the airQ device](https://www.air-q.com) 
+* [airQ homepage](https://www.air-q.com) - [airQ forum](https://forum.air-q.com)
 * [airQ data sheet (german)](https://uploads-ssl.webflow.com/5bd9feee2fb42232fe1d0196/5f898b110a9e9fea8049fa29_air-Q_Specs_de_aktuell_2020-06-25.pdf)
 * [WeeWX homepage](http://weewx.com) - [WeeWX Wiki](https://github.com/weewx/weewx/wiki)
 * [Wöllsdorf weather conditions](https://www.woellsdorf-wetter.de)

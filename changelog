@@ -13,3 +13,6 @@
 * configuration tool 'airq_conf'
 * bug fixes
 * log some config data when WeeWX is starting
+0.5
+* calculation of barometer value from pressure and temperature reading
+* more documentation

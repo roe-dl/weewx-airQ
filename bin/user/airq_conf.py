@@ -10,9 +10,11 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import with_statement
 
+# modules for WeeWX access
 import weewx
 import weecfg.database
 from weeutil.weeutil import y_or_n
+
 import user.airQ_corant
 import configobj
 import optparse
@@ -83,6 +85,8 @@ def main():
     # Create a command line parser:
     parser = optparse.OptionParser(usage=usage, epilog=epilog)
     
+    # options
+    
     parser.add_option("--device", type=str, metavar="DEVICE",
                        help="airQ device as defined in weewx.conf")
                        
@@ -92,6 +96,8 @@ def main():
 
     parser.add_option("--binding", metavar="BINDING_NAME", default='wx_binding',
                       help="The data binding to use. Default is 'wx_binding'.")
+    
+    # commands
                       
     parser.add_option("--print-config", action="store_true",
                       help="Get the config from the airQ device and print")
