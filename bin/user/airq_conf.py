@@ -14,10 +14,13 @@ from __future__ import with_statement
 import weewx
 import weecfg.database
 from weeutil.weeutil import y_or_n
+import weedb
 
 import user.airQ_corant
 import configobj
 import optparse
+import os.path
+import shutil
 
 # modules for airQ access
 import base64
@@ -35,7 +38,8 @@ usage = """airq_conf --help
        airq_conf --device=DEVICE --set-location=station
        airq_conf --device=DEVICE --set-location=LATITUDE,LOGITUDE
        airq_conf --device=DEVICE --set-roomsize=HEIGHT,AREA
-       airq_conf [--device=DEVICE] --set-ntp=NTP_SERVER"""
+       airq_conf [--device=DEVICE] --set-ntp=NTP_SERVER
+       airq_conf --create-skin"""
         
 epilog = """NOTE: MAKE A BACKUP OF YOUR DATABASE BEFORE USING THIS UTILITY!
 Many of its actions are irreversible!"""
@@ -47,6 +51,9 @@ NTP_SERVERS = {
     'ntp':'pool.ntp.org',
     'de':'ptbtime3.ptb.de',
     'ptb':'ptbtime3.ptb.de'}
+
+def obstype_with_prefix(obs_type, prefix):
+    return user.airQ_corant.AirqService.obstype_with_prefix(obs_type,prefix)
     
 def airQrequest(data, passwd):
     data = json.dumps(data)
@@ -117,6 +124,9 @@ def main():
     parser.add_option("--set-ntp", dest="ntp", type=str, metavar="NTP_SERVER",
                       help="write NTP server address to use into the airQ device")
     
+    parser.add_option("--create-skin", action="store_true",
+                      help="create a simple skin with all the devices configured")
+                      
     (options, args) = parser.parse_args()
     
     # get config_dict to use
@@ -129,7 +139,7 @@ def main():
     if action_drop is None: action_drop = False
     device = options.device
     db_binding = options.binding
-
+    
     if options.print_config:
         printConfig(config_path,config_dict,device)
     elif options.location:
@@ -138,6 +148,8 @@ def main():
         setRoomsize(config_dict,device,options.roomsize)
     elif options.ntp:
         setNTP(config_dict,device,options.ntp)
+    elif options.create_skin:
+        createSkin(config_path,config_dict, db_binding)
     else:
         addDropColumns(config_dict, db_binding, device, action_add, action_drop)
 
@@ -264,6 +276,20 @@ def dropColumns(config_dict, db_binding, cols):
         print("Column(s) '%s' dropped from the database" % ", ".join(cols))
 
 
+def enumColumns(config_dict, db_binding, cols):
+    manager_dict = weewx.manager.get_manager_dict_from_config(
+                                                  config_dict,db_binding)
+    existing_cols = []
+    with weewx.manager.Manager.open(manager_dict['database_dict']) as manager:
+        for col in cols:
+            try:
+                manager.getSql("SELECT `%s` from %s LIMIT 1;" % (col,manager.table_name))
+                existing_cols.append(col)
+            except weedb.NoColumnError:
+                pass
+    return existing_cols
+
+
 def setLocation(config_dict, device, loc):
     """ set location """
     if loc=="station":
@@ -311,7 +337,443 @@ def setConfig(config_dict, device, data):
     else:
         print("option --device=DEVICE missing")
 
-     
+
+HTML_HEAD='''<!DOCTYPE html>
+<html lang="$gettext.lang">
+  <head>
+    <meta charset="UTF-8">
+    <title>$station.location</title>
+    <link rel="icon" type="image/png" href="favicon.ico" />
+    <link rel="stylesheet" type="text/css" href="seasons.css"/>
+    <script src="seasons.js"></script>
+  </head>
+  <body onload="setup();">
+    #include "titlebar.inc"
+'''
+HTML_FOOT='''
+  </body>
+</html>
+'''
+
+
+def createSkin(config_path, config_dict, db_binding):
+    """ create skin """
+    sensors = {}
+    obstypes = {}
+    for dev in config_dict['airQ'].sections:
+        print("device '%s':" % dev)
+        reply = user.airQ_corant.airQget(
+                       config_dict['airQ'][dev]['host'],'/config',
+                       config_dict['airQ'][dev]['password'])
+        sensors[dev] = reply['content']['sensors']
+        print("  sensors %s" % sensors[dev])
+        cols = []
+        for img in IMG_DICT:
+            for obs in img[2]:
+                cols.append(obstype_with_prefix(obs,config_dict['airQ'][dev].get('prefix')))
+        obstypes[dev] = enumColumns(config_dict, db_binding, cols)
+        print("  obstypes in database %s" % obstypes[dev])
+    
+    seasons_skin_path = os.path.join(config_dict['WEEWX_ROOT'],
+                            config_dict['StdReport']['SKIN_ROOT'],
+                            config_dict['StdReport']['SeasonsReport']['skin'])
+    print("Seasons skin path: %s" % seasons_skin_path)
+    airq_skin_path = os.path.join(config_dict['WEEWX_ROOT'],
+                            config_dict['StdReport']['SKIN_ROOT'],
+                            'airQ')
+    print("airQ skin path:    %s" % airq_skin_path)
+    if not os.path.isdir(airq_skin_path):
+        os.mkdir(airq_skin_path)
+        print("created '%s'" % airq_skin_path)
+    else:
+        print("'%s' already exists, contents will be overwritten" % airq_skin_path)
+    print("copy seasons.css")
+    shutil.copy(os.path.join(seasons_skin_path,'seasons.css'),airq_skin_path)
+    print("copy seasons.js")
+    shutil.copy(os.path.join(seasons_skin_path,'seasons.js'),airq_skin_path)
+    print("copy favicon.ico")
+    shutil.copy(os.path.join(seasons_skin_path,'favicon.ico'),airq_skin_path)
+    print("copy titlebar.inc")
+    shutil.copy(os.path.join(seasons_skin_path,'titlebar.inc'),airq_skin_path)
+    if os.path.isdir(os.path.join(airq_skin_path,'font')):
+        print("font directory already exists")
+    else:
+        print("create font directory")
+        os.mkdir(os.path.join(airq_skin_path,'font'))
+    for file in os.listdir(os.path.join(seasons_skin_path,'font')):
+        print("copy %s" % file)
+        shutil.copy(os.path.join(seasons_skin_path,'font',file),os.path.join(airq_skin_path,'font'))
+    if os.path.isdir(os.path.join(airq_skin_path,'lang')):
+        print("language directory already exists")
+    else:
+        print("create language directory")
+        os.mkdir(os.path.join(airq_skin_path,'lang'))
+    airq_skin_file = os.path.join(airq_skin_path,'skin.conf')
+    with open(airq_skin_file,'w') as file:
+        print("creating skin file '%s'" % airq_skin_file) 
+        file.write("""###############################################################################
+# AIRQ SKIN CONFIGURATION FILE                                                #
+# Copyritht (c) 2021 Johanna Roedenbeck                                       #
+# Copyright (c) 2018-2021 Tom Keffer <tkeffer@gmail.com> and Matthew Wall     #
+# See the file LICENSE.txt for your rights.                                   #
+###############################################################################
+
+# The following section is for any extra tags that you want to be available in
+# the templates
+
+[Extras]
+""")
+        print("  writing section [CheetahGenerator]")
+        file.write("""
+###############################################################################
+
+# The CheetahGenerator creates files from templates.  This section
+# specifies which files will be generated from which template.
+
+[CheetahGenerator]
+
+    # Possible encodings include 'html_entities', 'strict_ascii', 'normalized_as
+    # as well as those listed in https://docs.python.org/3/library/codecs.html#s
+    encoding = html_entities
+
+    [[SummaryByMonth]]
+
+    [[SummaryByYear]]
+
+    [[ToDate]]
+        # Reports that show statistics "to date", such as day-to-date,
+        # week-to-date, month-to-date, etc.
+        
+        [[[index]]]
+            template = index.html.tmpl
+""")
+        for dev in config_dict['airQ'].sections:
+            template_file = "%s.html.tmpl" % dev
+            file.write("""        [[[%s]]]
+            template = %s
+""" % (dev,template_file))
+        print("  writing section [CopyGenerator]")
+        file.write("""
+###############################################################################
+
+# The CopyGenerator copies files from one location to another.
+
+[CopyGenerator]
+
+    # List of files to be copied only the first time the generator runs
+    copy_once = seasons.css, seasons.js, favicon.ico, font/*.woff, font/*.woff2
+
+    # List of files to be copied each time the generator runs
+    # copy_always = index.html
+
+
+""")
+        print("  writing section [ImageGenerator]")
+        file.write("""###############################################################################
+
+# The ImageGenerator creates image plots of data.
+
+[ImageGenerator]
+
+    # This section lists all the images to be generated, what SQL types are to
+    # be included in them, along with many plotting options. There is a default
+    # for almost everything. Nevertheless, values for most options are included
+    # to make it easy to see and understand the options.
+    #
+    # Fonts can be anything accepted by the Python Imaging Library (PIL), which
+    # includes truetype (.ttf), or PIL's own font format (.pil). See
+    # http://www.pythonware.com/library/pil/handbook/imagefont.htm for more
+    # details.  Note that "font size" is only used with truetype (.ttf)
+    # fonts. For others, font size is determined by the bit-mapped size,
+    # usually encoded in the file name (e.g., courB010.pil). A relative path
+    # for a font is relative to the SKIN_ROOT.  If a font cannot be found,
+    # then a default font will be used.
+    #
+    # Colors can be specified any of three ways:
+    #   1. Notation 0xBBGGRR;
+    #   2. Notation #RRGGBB; or
+    #   3. Using an English name, such as 'yellow', or 'blue'.
+    # So, 0xff0000, #0000ff, or 'blue' would all specify a pure blue color.
+
+    image_width = 500
+    image_height = 180
+    image_background_color = "#ffffff"
+
+    chart_background_color = "#ffffff"
+    chart_gridline_color = "#d0d0d0"
+
+    # Setting to 2 or more might give a sharper image with fewer jagged edges
+    anti_alias = 1
+
+    top_label_font_path = font/OpenSans-Bold.ttf
+    top_label_font_size = 14
+
+    unit_label_font_path = font/OpenSans-Bold.ttf
+    unit_label_font_size = 12
+    unit_label_font_color = "#787878"
+
+    bottom_label_font_path = font/OpenSans-Regular.ttf
+    bottom_label_font_size = 12
+    bottom_label_font_color = "#787878"
+    bottom_label_offset = 3
+
+    axis_label_font_path = font/OpenSans-Regular.ttf
+    axis_label_font_size = 10
+    axis_label_font_color = "#787878"
+
+    # Options for the compass rose, used for progressive vector plots
+    rose_label = N
+    rose_label_font_path = font/OpenSans-Regular.ttf
+    rose_label_font_size  = 9
+    rose_label_font_color = "#222222"
+
+    # Default colors for the plot lines. These can be overridden for
+    # individual lines using option 'color'.
+    chart_line_colors = "#4282b4", "#b44242", "#42b442", "#42b4b4", "#b442b4"
+
+    # Default fill colors for bar charts. These can be overridden for
+    # individual bar plots using option 'fill_color'.
+    chart_fill_colors = "#72b2c4", "#c47272", "#72c472", "#72c4c4", "#c472c4"
+
+    # Type of line. Options are 'solid' or 'none'.
+    line_type = 'solid'
+
+    # Size of marker in pixels
+    marker_size = 8
+
+    # Type of marker. Options are 'cross', 'x', 'circle', 'box', or 'none'.
+    marker_type ='none'
+
+    # The following option merits an explanation. The y-axis scale used for
+    # plotting can be controlled using option 'yscale'. It is a 3-way tuple,
+    # with values (ylow, yhigh, min_interval). If set to "None", a parameter is
+    # set automatically, otherwise the value is used. However, in the case of
+    # min_interval, what is set is the *minimum* y-axis tick interval. 
+    yscale = None, None, None
+
+    # For progressive vector plots, you can choose to rotate the vectors.
+    # Positive is clockwise.
+    # For my area, westerlies overwhelmingly predominate, so by rotating
+    # positive 90 degrees, the average vector will point straight up.
+    vector_rotate = 90
+
+    # This defines what fraction of the difference between maximum and minimum
+    # horizontal chart bounds is considered a gap in the samples and should not
+    # be plotted.
+    line_gap_fraction = 0.05
+
+    # This controls whether day/night bands will be shown. They only look good
+    # on plots wide enough to show individual days such as day and week plots.
+    show_daynight = true
+    # These control the appearance of the bands if they are shown.
+    # Here's a monochrome scheme:
+    daynight_day_color   = "#fdfaff"
+    daynight_night_color = "#dfdfe2"
+    daynight_edge_color  = "#e0d8d8"
+
+    # What follows is a list of subsections, each specifying a time span, such
+    # as a day, week, month, or year. There's nothing special about them or
+    # their names: it's just a convenient way to group plots with a time span
+    # in common. You could add a time span [[biweek_images]] and add the
+    # appropriate time length, aggregation strategy, etc., without changing
+    # any code.
+    #
+    # Within each time span, each sub-subsection is the name of a plot to be
+    # generated for that time span. The generated plot will be stored using
+    # that name, in whatever directory was specified by option 'HTML_ROOT'
+    # in weewx.conf.
+    #
+    # With one final nesting (four brackets!) is the sql type of each line to
+    # be included within that plot.
+    #
+    # Unless overridden, leaf nodes inherit options from their parent
+
+    # Default plot parameters
+    plot_type = line
+    aggregate_type = none
+    width = 1
+    time_length = 86400 # 24 hours
+
+    [[day_images]]
+        x_label_format = %H:%M
+        bottom_label_format = %x %X
+        time_length = 97200 # 27 hours
+
+""")
+        for dev in config_dict['airQ'].sections:
+            image_section(file, config_dict['airQ'][dev], dev, 'day', sensors[dev], obstypes[dev])
+
+        file.write("""
+    [[week_images]]
+        x_label_format = %d
+        bottom_label_format = %x %X
+        time_length = 604800 # 7 days
+        aggregate_type = avg
+        aggregate_interval = hour
+
+""")
+        for dev in config_dict['airQ'].sections:
+            image_section(file, config_dict['airQ'][dev], dev, 'week', sensors[dev], obstypes[dev])
+
+        file.write("""
+    [[month_images]]
+        x_label_format = %d
+        bottom_label_format = %x %X
+        time_length = 2592000 # 30 days
+        aggregate_type = avg
+        aggregate_interval = 10800 # 3 hours
+        show_daynight = false
+
+""")
+        for dev in config_dict['airQ'].sections:
+            image_section(file, config_dict['airQ'][dev], dev, 'month', sensors[dev],obstypes[dev])
+
+        file.write("""
+    [[year_images]]
+        x_label_format = %m/%d
+        bottom_label_format = %x %X
+        time_length = 31536000 # 365 days
+        aggregate_type = avg
+        aggregate_interval = day
+        show_daynight = false
+
+""")
+        for dev in config_dict['airQ'].sections:
+            image_section(file, config_dict['airQ'][dev], dev, 'year', sensors[dev],obstypes[dev])
+
+        print("  writing section [Generators]")
+        file.write("""###############################################################################
+
+[Generators]
+        # The list of generators that are to be run:
+        generator_list = weewx.cheetahgenerator.CheetahGenerator, weewx.imagegenerator.ImageGenerator, weewx.reportengine.CopyGenerator
+
+""")
+        print("  done.")
+    print("creating %s" % os.path.join(airq_skin_path,'index.html.tmpl'))
+    with open(os.path.join(airq_skin_path,'index.html.tmpl'),"w") as file:
+        file.write(HTML_HEAD)
+        file.write('<ul>')
+        for dev in config_dict['airQ'].sections:
+            file.write('<li><a href="%s.html">%s</a></li>' % (dev,dev))
+        file.write("</ul>")
+        file.write(HTML_FOOT)
+        print("  done.")
+    for dev in config_dict['airQ'].sections:
+        create_template(config_dict['airQ'][dev],dev,airq_skin_path,sensors[dev],obstypes[dev])
+
+IMG_DICT = [
+    ('barometer','pressure',['airqBarometer']),
+    ('tempdew','temperature',['airqTemp','airqDewpoint']),
+    ('hum','humidity',['airqHumidity']),
+    ('humabs','humidity_abs',['airqHumAbs']),
+    ('CO2','co2',['co2']),
+    ('TVOC','tvoc',['TVOC']),
+    ('PM','particulates',['pm1_0','pm2_5','pm10_0']),
+    ('CNT','particulates',['cnt0_3','cnt0_5','cnt1_0','cnt2_5','cnt5_0','cnt10_0']),
+    ('Idx','co2',['airqPerfIdx','airqHealthIdx']),
+    ('noise','sound',['noise']),
+    ('CO','co',['airqCO']),
+    ('NO2','no2',['no2']),
+    ('Oxygen','oxygen',['o2']),
+    ('Ozone','o3',['airqO3']),
+    ('Sulfur','so2',['so2','h2s'])]
+    
+def image_section(file, dev_dict, dev, zeit, sensors, obstypes):
+    """ write image section to skin.conf """
+    for img in IMG_DICT:
+        if img[1] in sensors:
+            file.write("""        [[[%s%s%s]]]
+""" % (zeit,dev,img[0]))
+            for obs in img[2]:
+                if obstype_with_prefix(obs,dev_dict.get('prefix')) in obstypes:
+                    file.write("""            [[[[%s]]]]
+""" % obstype_with_prefix(obs,dev_dict.get('prefix')))
+        file.write("""
+""")
+
+def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
+    """ create html template """
+    fn = dev+'.html.tmpl'
+    fn = os.path.join(airq_skin_path,fn)
+    print("creating %s" % fn)
+    with open(fn,"w") as file:
+        file.write(HTML_HEAD)
+        file.write('''
+    <div id="contents">
+      <div id="widget_group">
+<div id='current_widget' class="widget">
+  <div class="widget_title">
+    $gettext["Current Conditions"]
+    <a class="widget_control"
+      onclick="toggle_widget('current')">&diams;</a>
+  </div>
+
+  <div class="widget_contents">
+  <table>
+    <tbody>
+''')
+        for img in IMG_DICT:
+            if img[1] in sensors:
+                for obs in img[2]:
+                    unit = ''
+                    if obs=='airqHumAbs':
+                        unit = '.gram_per_meter_cubed'
+                    elif obs=='TVOC':
+                        unit = '.ppb'
+                    elif obs=='airqCO':
+                        unit = '.milligram_per_meter_cubed.format("%.2f")'
+                    elif obs=='airqO3':
+                        unit = '.microgram_per_meter_cubed.format("%.1f")'
+                    elif obs in ('pm1_0','pm2_5','pm10_0'):
+                        unit = '.format("%.1f")'
+                    file.write('''<tr>
+            <td class="label">$obs.label.%s</td>
+            <td class="data">$current.%s%s</td>
+</tr>
+''' % (obstype_with_prefix(obs,dev_dict.get('prefix')),obstype_with_prefix(obs,dev_dict.get('prefix')),unit))
+        file.write('''    </tbody>
+  </table>
+  </div>
+
+</div>
+
+      </div>
+''')
+        file.write('''
+      <div id="plot_group">
+        <div id="history_widget" class="widget">
+          <div id="plot_title" class="widget_title">$gettext[$page]["Plots"]:&nbsp;&nbsp;
+            <a class="button_selected" id="button_history_day"
+               onclick="choose_history('day')">$gettext["Day"]</a>
+            <a class="button" id="button_history_week"
+               onclick="choose_history('week')">$gettext["Week"]</a>
+            <a class="button" id="button_history_month"
+               onclick="choose_history('month')">$gettext["Month"]</a>
+            <a class="button" id="button_history_year"
+               onclick="choose_history('year')">$gettext["Year"]</a>
+          </div>
+''')
+        for zeit in ('day','week','month','year'):
+            file.write('''          <div id="history_%s" class="plot_container">
+''' % zeit)
+            for img in IMG_DICT:
+                if img[1] in sensors:
+                    file.write('''            #if $%s.%s.hasdata
+            <img src="%s%s%s.png" />
+            #end if
+''' % (zeit,obstype_with_prefix(img[2][0],dev_dict.get('prefix')),zeit,dev,img[0]))
+            file.write('''          </div>
+''')
+        file.write('''
+        </div>
+      </div>
+''')
+        file.write(HTML_FOOT)
+        print("  done.")
+
+
+
 if __name__ == "__main__":
     main()
 

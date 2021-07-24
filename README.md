@@ -210,6 +210,32 @@ commands.
 * `airq_conf --device=DEVICE --drop-columns`:
   drop the columns from the database
 
+### Create a skin
+
+The configuration utility comes with an option to create a simple skin
+based on the Seasons skin and the settings in `weewx.conf`. It creates
+a separate page for each device configured showing the current readings
+and diagram images. Diagram are only possible for observation types
+that are saved to the database.
+
+* `airq_conf --create-skin`
+
+The command does **not** change `weewx.conf`. If you want to use this
+skin you need to add the following section into the `StdReport` section
+of `weewx.conf`.
+
+```
+    [[airqReport]]
+        enable = true
+        skin = airQ
+        lang = de
+        unit_system = METRIC
+        HTML_ROOT = /var/www/html/weewx/airQ
+```
+
+For observation types that are not saved to the database, no diagram
+can be created. In these cases the diagram is empty.
+
 ### Set configuration parameters in the airQ device
 
 Those commands change configuration settings within the airQ device.

@@ -13,6 +13,9 @@
 * configuration tool 'airq_conf'
 * bug fixes
 * log some config data when WeeWX is starting
-0.5
+0.5 22jul2021
 * calculation of barometer value from pressure and temperature reading
 * more documentation
+0.6 24jul2021
+* option --create-skin for airq_conf
+* check negative values (they are invalid and mean calibration)

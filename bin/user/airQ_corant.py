@@ -38,7 +38,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = 0.5
+VERSION = 0.6
 
 # imports for airQ
 import base64
@@ -159,6 +159,10 @@ weewx.units.conversionDict.setdefault('ppb',{})
 weewx.units.conversionDict.setdefault('ppm',{})
 weewx.units.conversionDict['ppb']['ppm'] = lambda x:x*0.001
 weewx.units.conversionDict['ppm']['ppb'] = lambda x:x*1000
+weewx.units.default_unit_format_dict.setdefault('ppb',"%.0f")
+weewx.units.default_unit_label_dict.setdefault('ppb',u" ppb")
+weewx.units.default_unit_format_dict.setdefault('ppm',"%.0f")
+weewx.units.default_unit_label_dict.setdefault('ppm',u" ppm")
 
 ##############################################################################
 #   get data out of the airQ device                                          #
@@ -289,20 +293,20 @@ class AirqService(StdService):
         'pressure':    ('airqPressure',    'mbar',                      'group_pressure',lambda x:float(x[0])),
         'altimeter':   ('airqAltimeter',   'mbar',                      'group_pressure',lambda x:float(x[0])),
         'barometer':   ('airqBarometer',   'mbar',                      'group_pressure',lambda x:float(x[0])),
-        'co':          ('co',              'milligram_per_meter_cubed', 'group_concentration',lambda x:x[0]),
+        'co':          ('airqCO',          'milligram_per_meter_cubed', 'group_concentration',lambda x:x[0]),
         'co2':         ('co2',             'ppm',                       'group_fraction',lambda x:x[0]),
         'h2s':         ('h2s',             "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'no2':         ('no2',             "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'pm1':         ('pm1_0',           "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'pm2_5':       ('pm2_5',           "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'pm10':        ('pm10_0',          "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
-        'o3':          ('o3',              "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
+        'o3':          ('airqO3',          "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'so2':         ('so2',             "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'tvoc':        ('TVOC',            'ppb',                       'group_fraction',lambda x:x[0]),
         'oxygen':      ('o2',              'percent', 'group_percent',lambda x:x[0]),
         'sound':       ('noise',           'dB',                        'group_db', lambda x:x[0]),
-        'performance': ('airqPerfIdx',     None, None, lambda x:float(x)/10),
-        'health':      ('airqHealthIdx',   None, None, lambda x:x/10),
+        'performance': ('airqPerfIdx',     'percent', 'group_percent', lambda x:float(x)/10),
+        'health':      ('airqHealthIdx',   'percent', 'group_percent', lambda x:x/10),
         'cnt0_3':      ('cnt0_3',          'count', 'group_count', lambda x:int(x[0])),
         'cnt0_5':      ('cnt0_5',          'count', 'group_count', lambda x:int(x[0])),
         'cnt1':        ('cnt1_0',          'count', 'group_count', lambda x:int(x[0])),
@@ -461,6 +465,7 @@ class AirqService(StdService):
                             try:
                                 xx = self.AIRQ_DATA.get(jj)
                                 val = xx[3](reply[jj]) if xx is not None else reply[jj]
+                                if val<0.0: val = None
                             except (ValueError,TypeError,IndexError,KeyError) as e:
                                 val = None
                         #logdbg("val %s - %s - %s" % (jj,reply[jj],val))
