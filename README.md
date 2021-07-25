@@ -236,6 +236,9 @@ of `weewx.conf`.
 For observation types that are not saved to the database, no diagram
 can be created. In these cases the diagram is empty.
 
+**Note**: The language and unit system options are available from
+WeeWX version 4.6 alpha on, only.
+
 ### Set configuration parameters in the airQ device
 
 Those commands change configuration settings within the airQ device.

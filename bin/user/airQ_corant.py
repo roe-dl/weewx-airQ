@@ -352,7 +352,7 @@ class AirqService(StdService):
                     if len(__altitude)==3:
                         __altitude = weewx.units.ValueTuple(__altitude[0],__altitude[1],__altitude[2])
                     else:
-                        __altitude = weewx.units.ValueTuple(__altitude[0],__altitdue[1],'group_altitude')
+                        __altitude = weewx.units.ValueTuple(__altitude[0],__altitude[1],'group_altitude')
                 else:
                     __altitude = engine.stn_info.altitude_vt
                 __altitude = weewx.units.convert(__altitude,'meter')[0]
@@ -418,7 +418,8 @@ class AirqService(StdService):
         for ii in self.AIRQ_DATA:
             _obs_conf = self.AIRQ_DATA[ii]
             if _obs_conf and _obs_conf[2] is not None:
-                weewx.units.obs_group_dict.setdefault(self.obstype_with_prefix(_obs_conf[0],prefix),_obs_conf[2])
+                #weewx.units.obs_group_dict.setdefault(self.obstype_with_prefix(_obs_conf[0],prefix),_obs_conf[2])
+                weewx.units.obs_group_dict[self.obstype_with_prefix(_obs_conf[0],prefix)] = _obs_conf[2]
         # start thread
         self.threads[thread_name]['thread'].start()
         return True

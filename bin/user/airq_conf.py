@@ -348,7 +348,14 @@ HTML_HEAD='''<!DOCTYPE html>
     <script src="seasons.js"></script>
   </head>
   <body onload="setup();">
-    #include "titlebar.inc"
+    <div id="title_bar">
+      <div id="title">
+        <h1 class="page_title">$station.location</h1>
+        <p class="lastupdate">$current.dateTime</p>
+      </div>
+      <div id="reports">
+      </div>
+    </div>
 '''
 HTML_FOOT='''
   </body>
@@ -360,12 +367,14 @@ def createSkin(config_path, config_dict, db_binding):
     """ create skin """
     sensors = {}
     obstypes = {}
+    RoomTypes = {}
     for dev in config_dict['airQ'].sections:
         print("device '%s':" % dev)
         reply = user.airQ_corant.airQget(
                        config_dict['airQ'][dev]['host'],'/config',
                        config_dict['airQ'][dev]['password'])
         sensors[dev] = reply['content']['sensors']
+        RoomTypes[dev] = reply['content'].get('RoomType')
         print("  sensors %s" % sensors[dev])
         cols = []
         for img in IMG_DICT:
@@ -382,6 +391,8 @@ def createSkin(config_path, config_dict, db_binding):
                             config_dict['StdReport']['SKIN_ROOT'],
                             'airQ')
     print("airQ skin path:    %s" % airq_skin_path)
+    seasons_lang = config_dict['StdReport']['SeasonsReport'].get('lang')
+    print("Seasons skin lang: %s" % seasons_lang)
     if not os.path.isdir(airq_skin_path):
         os.mkdir(airq_skin_path)
         print("created '%s'" % airq_skin_path)
@@ -393,8 +404,8 @@ def createSkin(config_path, config_dict, db_binding):
     shutil.copy(os.path.join(seasons_skin_path,'seasons.js'),airq_skin_path)
     print("copy favicon.ico")
     shutil.copy(os.path.join(seasons_skin_path,'favicon.ico'),airq_skin_path)
-    print("copy titlebar.inc")
-    shutil.copy(os.path.join(seasons_skin_path,'titlebar.inc'),airq_skin_path)
+    #print("copy titlebar.inc")
+    #shutil.copy(os.path.join(seasons_skin_path,'titlebar.inc'),airq_skin_path)
     if os.path.isdir(os.path.join(airq_skin_path,'font')):
         print("font directory already exists")
     else:
@@ -601,7 +612,7 @@ def createSkin(config_path, config_dict, db_binding):
 
 """)
         for dev in config_dict['airQ'].sections:
-            image_section(file, config_dict['airQ'][dev], dev, 'day', sensors[dev], obstypes[dev])
+            image_section(file, config_dict['airQ'][dev], dev, 'day', sensors[dev], obstypes[dev], seasons_lang)
 
         file.write("""
     [[week_images]]
@@ -613,7 +624,7 @@ def createSkin(config_path, config_dict, db_binding):
 
 """)
         for dev in config_dict['airQ'].sections:
-            image_section(file, config_dict['airQ'][dev], dev, 'week', sensors[dev], obstypes[dev])
+            image_section(file, config_dict['airQ'][dev], dev, 'week', sensors[dev], obstypes[dev], seasons_lang)
 
         file.write("""
     [[month_images]]
@@ -626,7 +637,7 @@ def createSkin(config_path, config_dict, db_binding):
 
 """)
         for dev in config_dict['airQ'].sections:
-            image_section(file, config_dict['airQ'][dev], dev, 'month', sensors[dev],obstypes[dev])
+            image_section(file, config_dict['airQ'][dev], dev, 'month', sensors[dev],obstypes[dev], seasons_lang)
 
         file.write("""
     [[year_images]]
@@ -639,7 +650,7 @@ def createSkin(config_path, config_dict, db_binding):
 
 """)
         for dev in config_dict['airQ'].sections:
-            image_section(file, config_dict['airQ'][dev], dev, 'year', sensors[dev],obstypes[dev])
+            image_section(file, config_dict['airQ'][dev], dev, 'year', sensors[dev],obstypes[dev], seasons_lang)
 
         print("  writing section [Generators]")
         file.write("""###############################################################################
@@ -650,6 +661,10 @@ def createSkin(config_path, config_dict, db_binding):
 
 """)
         print("  done.")
+    airqlang = SkinLanguage(seasons_skin_path,airq_skin_path,seasons_lang)
+    for dev in config_dict['airQ'].sections:
+        airqlang.device(config_dict['airQ'][dev].get('prefix'),sensors[dev],obstypes[dev],RoomTypes.get(dev))
+    airqlang.close()
     print("creating %s" % os.path.join(airq_skin_path,'index.html.tmpl'))
     with open(os.path.join(airq_skin_path,'index.html.tmpl'),"w") as file:
         file.write(HTML_HEAD)
@@ -679,7 +694,7 @@ IMG_DICT = [
     ('Ozone','o3',['airqO3']),
     ('Sulfur','so2',['so2','h2s'])]
     
-def image_section(file, dev_dict, dev, zeit, sensors, obstypes):
+def image_section(file, dev_dict, dev, zeit, sensors, obstypes, lang):
     """ write image section to skin.conf """
     for img in IMG_DICT:
         if img[1] in sensors:
@@ -689,6 +704,9 @@ def image_section(file, dev_dict, dev, zeit, sensors, obstypes):
                 if obstype_with_prefix(obs,dev_dict.get('prefix')) in obstypes:
                     file.write("""            [[[[%s]]]]
 """ % obstype_with_prefix(obs,dev_dict.get('prefix')))
+                    if img[1]=='particulates':
+                        file.write('''                label = "%s"
+''' % obs.replace('_',',' if lang and lang=='de' else '.').upper())
         file.write("""
 """)
 
@@ -771,6 +789,97 @@ def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
 ''')
         file.write(HTML_FOOT)
         print("  done.")
+
+class SkinLanguage(object):
+
+    def __init__(self, seasons_skin_path, airq_skin_path, lang):
+        self.lang = lang
+        if lang:
+            lang_fn = lang+'.conf'
+            self.seasons_lang_path = os.path.join(seasons_skin_path,'lang',lang_fn)
+            self.airq_lang_path = os.path.join(airq_skin_path,'lang',lang_fn)
+        else:
+            print("no language defined")
+            self.seasons_lang_path = None
+            self.airq_lang_path = None
+        if os.path.isfile(self.seasons_lang_path):
+            self.seasons_lang = configobj.ConfigObj(self.seasons_lang_path)
+        else:
+            print("'%s' does not exist" % self.seasons_lang_path)
+        if os.path.isfile(self.airq_lang_path):
+            ans = y_or_n("'%s' exsists. Overwrite? (y/n): " % self.airq_lang_path)
+            self.overwrite = ans=='y'
+        else:
+            self.overwrite = True
+        if self.overwrite:
+            print("creating %s" % self.airq_lang_path)
+            self.airq_lang = configobj.ConfigObj(encoding='utf-8',indent_type='    ')
+            self.airq_lang.filename = self.airq_lang_path
+            self.airq_lang['Labels'] = {}
+            self.airq_lang['Labels']['Generic'] = {}
+            self.airq_lang['Texts'] = {}
+            for ii in ['Current Conditions','HiLo','Plots','Today','Day','Week','Month','Year','Rainyear','Rainyear1','Rainyear2']:
+                    self.airq_lang['Texts'][ii] = self.seasons_lang['Texts'].get(ii,ii)
+                    
+    def close(self):
+        if self.overwrite and self.airq_lang_path:
+            self.airq_lang.write()
+            print("  done.")
+    
+    SIMILAR_IN = {
+        'airqPressure':'pressure',
+        'airqAltimeter':'altimeter',
+        'airqBarometer':'barometer',
+        'airqTemp':'inTemp',
+        'airqHumidity':'inHumidity',
+        'airqDewpoint':'inDewpoint',
+        'noise':'noise'}
+    
+    SIMILAR_OUT = {
+        'airqPressure':'pressure',
+        'airqAltimeter':'altimeter',
+        'airqBarometer':'barometer',
+        'airqTemp':'outTemp',
+        'airqHumidity':'outHumidity',
+        'airqDewpoint':'outDewpoint',
+        'noise':'noise'}
+        
+    INDIFFERENT = {
+        'airqCO':'CO',
+        'airqO3':'O<sub>3</sub>',
+        'pm1_0':'PM<sub>1.0</sub>',
+        'pm2_5':'PM<sub>2.5</sub>',
+        'pm10_0':'PM<sub>10.0</sub>',
+        'TVOC':'TVOC'}
+        
+    TRANSLATE = {
+        'en':{
+            'airqPerfIdx':'Performance index',
+            'airqHealthIdx':'Health Index',
+            'co2':'Carbon dioxide'},
+        'de':{
+            'airqPerfIdx':'Leistungsindex',
+            'airqHealthIdx':'Gesundheitsindex',
+            'co2':'Kohlendioxid'}}
+    
+    def device(self,prefix, sensors, obstypes, RoomType):
+        if not self.overwrite or not self.airq_lang_path: return
+        if RoomType=='outdoor':
+            similar = self.SIMILAR_OUT
+        else:
+            similar = self.SIMILAR_IN
+        for img in IMG_DICT:
+            if img[1] in sensors:
+                for obs in img[2]:
+                    obsp = obstype_with_prefix(obs,prefix)
+                    if obs in self.INDIFFERENT:
+                        self.airq_lang['Labels']['Generic'][obsp] = self.INDIFFERENT[obs]
+                    elif obs in similar:
+                        self.airq_lang['Labels']['Generic'][obsp] = self.seasons_lang['Labels']['Generic'].get(similar.get(obs),obsp)
+                    elif self.lang in ('en','de') and obs in self.TRANSLATE['en']:
+                        self.airq_lang['Labels']['Generic'][obsp] = self.TRANSLATE[self.lang][obs]
+                    else:
+                        self.airq_lang['Labels']['Generic'][obsp] = obsp
 
 
 
