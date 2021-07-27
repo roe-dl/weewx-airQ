@@ -103,6 +103,18 @@ The tool is based on the WeeWX `wee_database` tool and provides means
 to add the necessary columns according to the prefix setting to the
 database or drop them from it. See below for details.
 
+### Special cases
+
+If you run several instances of WeeWX and transfer readings from one
+to the other by MQTT, parallel database access, or something, then 
+you also need to install
+weewx-airQ at the target system and use an empty `[airQ]` section
+in `weewx.conf`. That is because in initialization of the weewx-airQ
+extension several additional units and conversations are
+added to the lists in `units.py` They are neccassary to convert
+between ppm and ppb as well as µg/m<sup>3</sup>, mg/m<sup>3</sup>,
+and g/m<sup>3</sup>, respectively. 
+
 ### Display values (CheetahGenerator)
 
 The observation types described below can be used for tags as described

@@ -440,7 +440,9 @@ class AirqService(StdService):
                     # get new data packet from queue
                     reply = self.threads[ii]['queue'].get(block=False)
                     # check timestamp
-                    if reply['timestamp']<=last_ts: continue
+                    if reply['timestamp']<=last_ts: 
+                        logdbg("New record is older than last record.")
+                        continue
                     # check status
                     try:
                         if reply.get('Status','')=='OK':
@@ -527,6 +529,9 @@ class AirqService(StdService):
             # 'dateTime' and 'interval' must not be in data
             if data.get('dateTime'): del data['dateTime']
             if data.get('interval'): del data['interval']
+            # log 
+            if self.debug>=3: 
+                logdbg("PACKET %s" % data)
             # update loop packet with airQ data
             event.packet.update(data)
 

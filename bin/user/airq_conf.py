@@ -856,10 +856,12 @@ class SkinLanguage(object):
         'en':{
             'airqPerfIdx':'Performance index',
             'airqHealthIdx':'Health Index',
+            'airqHumAbs':'Absolute humidity',
             'co2':'Carbon dioxide'},
         'de':{
             'airqPerfIdx':'Leistungsindex',
             'airqHealthIdx':'Gesundheitsindex',
+            'airqHumAbs':'absolute Luftfeuchte',
             'co2':'Kohlendioxid'}}
     
     def device(self,prefix, sensors, obstypes, RoomType):
