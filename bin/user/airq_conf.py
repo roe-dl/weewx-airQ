@@ -688,10 +688,10 @@ IMG_DICT = [
     ('CNT','particulates',['cnt0_3','cnt0_5','cnt1_0','cnt2_5','cnt5_0','cnt10_0']),
     ('Idx','co2',['airqPerfIdx','airqHealthIdx']),
     ('noise','sound',['noise']),
-    ('CO','co',['airqCO']),
+    ('CO','co',['airqCO_m']),
     ('NO2','no2',['no2']),
     ('Oxygen','oxygen',['o2']),
-    ('Ozone','o3',['airqO3']),
+    ('Ozone','o3',['airqO3_m']),
     ('Sulfur','so2',['so2','h2s'])]
     
 def image_section(file, dev_dict, dev, zeit, sensors, obstypes, lang):
@@ -739,9 +739,9 @@ def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
                         unit = '.gram_per_meter_cubed'
                     elif obs=='TVOC':
                         unit = '.ppb'
-                    elif obs=='airqCO':
+                    elif obs=='airqCO_m':
                         unit = '.milligram_per_meter_cubed.format("%.2f")'
-                    elif obs=='airqO3':
+                    elif obs=='airqO3_m':
                         unit = '.microgram_per_meter_cubed.format("%.1f")'
                     elif obs in ('pm1_0','pm2_5','pm10_0'):
                         unit = '.format("%.1f")'
@@ -845,8 +845,8 @@ class SkinLanguage(object):
         'noise':'noise'}
         
     INDIFFERENT = {
-        'airqCO':'CO',
-        'airqO3':'O<sub>3</sub>',
+        'airqCO_m':'CO',
+        'airqO3_m':'O<sub>3</sub>',
         'pm1_0':'PM<sub>1.0</sub>',
         'pm2_5':'PM<sub>2.5</sub>',
         'pm10_0':'PM<sub>10.0</sub>',

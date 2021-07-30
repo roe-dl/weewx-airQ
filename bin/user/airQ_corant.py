@@ -38,7 +38,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = 0.6
+VERSION = 0.7
 
 # imports for airQ
 import base64
@@ -274,7 +274,7 @@ class AirqThread(threading.Thread):
         
 
 ##############################################################################
-#   WeeWX service for airQ device                                            #
+#   data_services: augment LOOP packet with airQ readings                    #
 ##############################################################################
 
 class AirqService(StdService):
@@ -293,15 +293,19 @@ class AirqService(StdService):
         'pressure':    ('airqPressure',    'mbar',                      'group_pressure',lambda x:float(x[0])),
         'altimeter':   ('airqAltimeter',   'mbar',                      'group_pressure',lambda x:float(x[0])),
         'barometer':   ('airqBarometer',   'mbar',                      'group_pressure',lambda x:float(x[0])),
-        'co':          ('airqCO',          'milligram_per_meter_cubed', 'group_concentration',lambda x:x[0]),
+        'co':          ('airqCO_m',        'milligram_per_meter_cubed', 'group_concentration',lambda x:x[0]),
+        'co_vol':      ('co',              'ppm',                       'group_fraction',lambda x:x),
         'co2':         ('co2',             'ppm',                       'group_fraction',lambda x:x[0]),
         'h2s':         ('h2s',             "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
-        'no2':         ('no2',             "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
+        'no2':         ('no2_m',           "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
+        'no2_vol':     ('no2',             'ppb',                       'group_fraction',lambda x:x[0]),
         'pm1':         ('pm1_0',           "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'pm2_5':       ('pm2_5',           "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
         'pm10':        ('pm10_0',          "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
-        'o3':          ('airqO3',          "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
-        'so2':         ('so2',             "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
+        'o3':          ('airqO3_m',        "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
+        'o3_vol':      ('o3',              "ppb",                       "group_fraction",lambda x:x),
+        'so2':         ('so2_m',           "microgram_per_meter_cubed", "group_concentration",lambda x:x[0]),
+        'so2_vol':     ('so2',             'ppb',                       'group_fraction',lambda x:x[0]),
         'tvoc':        ('TVOC',            'ppb',                       'group_fraction',lambda x:x[0]),
         'oxygen':      ('o2',              'percent', 'group_percent',lambda x:x[0]),
         'sound':       ('noise',           'dB',                        'group_db', lambda x:x[0]),
@@ -329,10 +333,17 @@ class AirqService(StdService):
         'DeviceID',
         'Status',
         'bat']
+    
+    # conversion volume to mass according to Dr. Daniel Lehmann of Corant
+    CONV_V_M = {
+        'co':1.15,
+        'no2':1.88,
+        'o3':1.96,
+        'so2':2.62}
         
     def __init__(self, engine, config_dict):
         super(AirqService,self).__init__(engine, config_dict)
-        loginf("air-Q %s" % VERSION)
+        loginf("air-Q %s service" % VERSION)
         # logging configuration
         self.log_success = config_dict.get('log_success',True)
         self.log_failure = config_dict.get('log_failure',True)
@@ -523,6 +534,21 @@ class AirqService(StdService):
                     data['barometer'] = sealevel_pressure_Metric(data['pressure'],self.threads[ii]['altitude'],t_C)
                 except (ValueError,TypeError,IndexError,KeyError):
                     pass
+            # volume or mass
+            try:
+                if self.threads[ii]['ppb&ppm']:
+                    for vmobs in self.CONV_V_M:
+                        if vmobs in data and vmobs in self.AIRQ_DATA:
+                            data[vmobs+'_vol'] = data[vmobs]
+                            data[vmobs] = self.convert_to_m(ii,vmobs,data[vmobs])
+                else:
+                    for vmobs in self.CONV_V_M:
+                        if vmobs in data and vmobs in self.AIRQ_DATA:
+                            data[vmobs+'_vol'] = self.convert_to_v(ii,vmobs,data[vmobs])
+                            logdbg("%s: mass %.3f vol %.3f" % (vmobs,data[vmobs],data[vmobs+'_vol']))
+                            pass
+            except (ValueError,TypeError,IndexError,KeyError) as e:
+                pass
             # convert airQ to WeeWX observation type names and
             # values to archive unit system
             data = self.airq_to_weewx(data, self.threads[ii].get('prefix'), event.packet.get('usUnits'))
@@ -534,6 +560,16 @@ class AirqService(StdService):
                 logdbg("PACKET %s" % data)
             # update loop packet with airQ data
             event.packet.update(data)
+            
+    def convert_to_m(self, thread_name, obs, val):
+        """ convert volume to mass """
+        if not self.threads[thread_name]['ppb&ppm']: return val
+        return self.CONV_V_M[obs] * val
+        
+    def convert_to_v(self, thread_name, obs, val):
+        """ convert mass to volume """
+        if self.threads[thread_name]['ppb&ppm']: return val
+        return val / self.CONV_V_M[obs]
 
     @staticmethod
     def obstype_with_prefix(obs_type,prefix):
@@ -570,9 +606,36 @@ class AirqService(StdService):
             # if prefix is set prepend key with prefix
             weewx_key = self.obstype_with_prefix(weewx_key,prefix)
             #if prefix: weewx_key = prefix + '_' + weewx_key.replace('airq','')
+            if False:
+                if weewx_key not in weewx.units.obs_group_dict:
+                    loginf("obstype '%s' not in weewx.units.obs_group_dict (airQ '%s')" % (weewx_key,key))
             _data[weewx_key] = val
         return _data
 
+##############################################################################
+#   prep_services: augment units.py                                          #
+##############################################################################
+
+class AirqUnits(StdService):
+
+    def __init__(self, engine, config_dict):
+        super(AirqUnits,self).__init__(engine, config_dict)
+        loginf("air-Q %s initialize units" % VERSION)
+
+        if 'airQ' in config_dict:
+            for device in config_dict['airQ'].sections:
+                self._augment_obs_group_dict(device, config_dict['airQ'][device].get('prefix'))
+
+    def _augment_obs_group_dict(self, device, prefix):
+        """ set units for observation types """
+        log_dict = {}
+        for ii in AirqService.AIRQ_DATA:
+            _obs_conf = AirqService.AIRQ_DATA[ii]
+            if _obs_conf and _obs_conf[2] is not None:
+                weewx_key = AirqService.obstype_with_prefix(_obs_conf[0],prefix)
+                weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
+                log_dict[weewx_key] = _obs_conf[2]
+        loginf("device '%s': observation group dict %s" % (device,log_dict))
 
     
 # To test the service, run it directly as follows:

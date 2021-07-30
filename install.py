@@ -10,11 +10,12 @@ def loader():
 class AirqInstaller(ExtensionInstaller):
     def __init__(self):
         super(AirqInstaller, self).__init__(
-            version="0.6",
+            version="0.7",
             name='airQ',
             description='Service to retrieve data from the airQ device of Corant GmbH',
             author="Johanna Roedenbeck",
             author_email="",
+            prep_services='user.airQ_corant.AirqUnits',
             data_services='user.airQ_corant.AirqService',
             config={
               'airQ':{

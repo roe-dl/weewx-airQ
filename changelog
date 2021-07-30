@@ -18,4 +18,10 @@
 * more documentation
 0.6 24jul2021
 * option --create-skin for airq_conf
-* check negative values (they are invalid and mean calibration)
+* check negative values (they are invalid and are returned during calibration)
+0.7 30jul2021
+* configure units before main loop of WeeWX
+* support for 'ppb&ppbm' mode of airQ
+* convert between ppb/ppm and {µm}g/m^3 according to the builtin formulas of airQ
+* provide observation types CO, NO2, O3, SO2 in ppm as well as µg/m^3
+* instructions for use with multiple instances of WeeWX

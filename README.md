@@ -58,8 +58,9 @@ python3 -m Cryptodome.SelfTest
    ...
    [Engine]
        [[Services]]
-           ...
+           prep_services = ... ,user.airQ_corant.AirqUnits
            data_services = ... ,user.airQ_corant.AirqService
+           ...
    ```
    
 5) restart weewx
@@ -108,8 +109,10 @@ database or drop them from it. See below for details.
 If you run several instances of WeeWX and transfer readings from one
 to the other by MQTT, parallel database access, or something, then 
 you also need to install
-weewx-airQ at the target system and use an empty `[airQ]` section
-in `weewx.conf`. That is because in initialization of the weewx-airQ
+weewx-airQ at the target system and include `user.airQ_corant.AirqUnits`
+in line `prep_services`, but omit `user.airQ_corant.AirqService`
+in line `data_services`. 
+That is because in initialization of the weewx-airQ
 extension several additional units and conversations are
 added to the lists in `units.py` They are neccassary to convert
 between ppm and ppb as well as µg/m<sup>3</sup>, mg/m<sup>3</sup>,
