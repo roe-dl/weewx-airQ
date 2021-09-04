@@ -25,3 +25,8 @@
 * convert between ppb/ppm and {µm}g/m^3 according to the builtin formulas of airQ
 * provide observation types CO, NO2, O3, SO2 in ppm as well as µg/m^3
 * instructions for use with multiple instances of WeeWX
+0.8 04sep2021
+* adapt mass-volume conversion to method of firmware 1.75
+* fixed bug that caused DeviceID, Status, and bat always to be None
+* DeviceID and Status in title bar
+* fixed bug in install.py thanks to Hartmut

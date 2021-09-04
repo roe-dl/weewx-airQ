@@ -45,6 +45,7 @@ python3 -m Cryptodome.SelfTest
    [airQ]
 
        query_interval = 5.0 # this is the default, if option is missing
+       volume_mass_method = 1 # 0 - temp/pressure independent factor
 
        [[first_device]]
            host = replace_me_by_host_address_or_IP

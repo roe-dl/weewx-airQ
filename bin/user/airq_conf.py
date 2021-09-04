@@ -211,7 +211,10 @@ def addDropColumns(config_dict, db_binding, device, action_add, action_drop):
                 # columns of the original schema
                 manager_dict = weewx.manager.get_manager_dict_from_config(
                                                   config_dict,db_binding)
-                schema = manager_dict.get('schema',{}).get('table',{})
+                try:
+                    schema = manager_dict.get('schema',{}).get('table',[])
+                except AttributeError:
+                    schema = manager_dict.get('schema',[])
                 # determine columns to add or drop
                 cols = []
                 ocls = []
@@ -342,7 +345,7 @@ HTML_HEAD='''<!DOCTYPE html>
 <html lang="$gettext.lang">
   <head>
     <meta charset="UTF-8">
-    <title>$station.location</title>
+    <title>$station.location $page</title>
     <link rel="icon" type="image/png" href="favicon.ico" />
     <link rel="stylesheet" type="text/css" href="seasons.css"/>
     <script src="seasons.js"></script>
@@ -350,10 +353,13 @@ HTML_HEAD='''<!DOCTYPE html>
   <body onload="setup();">
     <div id="title_bar">
       <div id="title">
-        <h1 class="page_title">$station.location</h1>
+        <h1 class="page_title">$station.location $page</h1>
         <p class="lastupdate">$current.dateTime</p>
       </div>
       <div id="reports">
+        ID: $current.%s.raw
+        <br/>
+        $current.%s.raw
       </div>
     </div>
 '''
@@ -704,7 +710,7 @@ def image_section(file, dev_dict, dev, zeit, sensors, obstypes, lang):
                 if obstype_with_prefix(obs,dev_dict.get('prefix')) in obstypes:
                     file.write("""            [[[[%s]]]]
 """ % obstype_with_prefix(obs,dev_dict.get('prefix')))
-                    if img[1]=='particulates':
+                    if img[1]=='particulates' or obs in ('o3','so2','no2','h2s'):
                         file.write('''                label = "%s"
 ''' % obs.replace('_',',' if lang and lang=='de' else '.').upper())
         file.write("""
@@ -716,7 +722,7 @@ def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
     fn = os.path.join(airq_skin_path,fn)
     print("creating %s" % fn)
     with open(fn,"w") as file:
-        file.write(HTML_HEAD)
+        file.write(HTML_HEAD % (obstype_with_prefix('airqDeviceID',dev_dict.get('prefix')),obstype_with_prefix('airqStatus',dev_dict.get('prefix'))))
         file.write('''
     <div id="contents">
       <div id="widget_group">
@@ -737,7 +743,7 @@ def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
                     unit = ''
                     if obs=='airqHumAbs':
                         unit = '.gram_per_meter_cubed'
-                    elif obs=='TVOC':
+                    elif obs in ('TVOC','so2','no2'):
                         unit = '.ppb'
                     elif obs=='airqCO_m':
                         unit = '.milligram_per_meter_cubed.format("%.2f")'
@@ -807,7 +813,7 @@ class SkinLanguage(object):
         else:
             print("'%s' does not exist" % self.seasons_lang_path)
         if os.path.isfile(self.airq_lang_path):
-            ans = y_or_n("'%s' exsists. Overwrite? (y/n): " % self.airq_lang_path)
+            ans = y_or_n("'%s' exists. Overwrite? (y/n): " % self.airq_lang_path)
             self.overwrite = ans=='y'
         else:
             self.overwrite = True
@@ -846,7 +852,14 @@ class SkinLanguage(object):
         
     INDIFFERENT = {
         'airqCO_m':'CO',
+        'co':'CO',
         'airqO3_m':'O<sub>3</sub>',
+        'o3':'O<sub>3</sub>',
+        'so2':'SO<sub>2</sub>',
+        'so2_m':'SO<sub>2</sub>',
+        'no2':'NO<sub>2</sub>',
+        'no2_m':'NO<sub>2</sub>',
+        'h2s':'H<sub>2</sub>S',
         'pm1_0':'PM<sub>1.0</sub>',
         'pm2_5':'PM<sub>2.5</sub>',
         'pm10_0':'PM<sub>10.0</sub>',
@@ -857,12 +870,26 @@ class SkinLanguage(object):
             'airqPerfIdx':'Performance index',
             'airqHealthIdx':'Health Index',
             'airqHumAbs':'Absolute humidity',
-            'co2':'Carbon dioxide'},
+            'co2':'Carbon dioxide',
+            'noise':'Noise',
+            'o3':'Ozone',
+            'airqO3_m':'Ozone'},
         'de':{
             'airqPerfIdx':'Leistungsindex',
             'airqHealthIdx':'Gesundheitsindex',
             'airqHumAbs':'absolute Luftfeuchte',
-            'co2':'Kohlendioxid'}}
+            'co2':'Kohlendioxid',
+            'noise':'Lärm',
+            'o3':'Ozon',
+            'airqO3_m':'Ozon'},
+        'fr':{
+            'airqPerfIdx':'Indice de performance',
+            'airqHealthIdx':'Indice de santé',
+            'airqHumAbs':'humidité absolue',
+            'co2':'Dioxyde de carbone',
+            'noise':'Pollution sonore',
+            'o3':'Ozone',
+            'airqO3_m':'Ozone'}}
     
     def device(self,prefix, sensors, obstypes, RoomType):
         if not self.overwrite or not self.airq_lang_path: return
@@ -874,12 +901,12 @@ class SkinLanguage(object):
             if img[1] in sensors:
                 for obs in img[2]:
                     obsp = obstype_with_prefix(obs,prefix)
-                    if obs in self.INDIFFERENT:
-                        self.airq_lang['Labels']['Generic'][obsp] = self.INDIFFERENT[obs]
-                    elif obs in similar:
+                    if obs in similar and similar[obs] in self.seasons_lang['Labels']['Generic']:
                         self.airq_lang['Labels']['Generic'][obsp] = self.seasons_lang['Labels']['Generic'].get(similar.get(obs),obsp)
-                    elif self.lang in ('en','de') and obs in self.TRANSLATE['en']:
+                    elif self.lang in self.TRANSLATE and obs in self.TRANSLATE[self.lang]:
                         self.airq_lang['Labels']['Generic'][obsp] = self.TRANSLATE[self.lang][obs]
+                    elif obs in self.INDIFFERENT:
+                        self.airq_lang['Labels']['Generic'][obsp] = self.INDIFFERENT[obs]
                     else:
                         self.airq_lang['Labels']['Generic'][obsp] = obsp
 

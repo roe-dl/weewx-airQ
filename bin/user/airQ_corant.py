@@ -38,7 +38,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = 0.7
+VERSION = 0.8
 
 # imports for airQ
 import base64
@@ -224,6 +224,7 @@ def airQget(host, page, passwd):
         connection.close()
     return reply
 
+    
 ##############################################################################
 #    Thread to retrieve data from the air-Q device                           #
 ##############################################################################
@@ -335,11 +336,18 @@ class AirqService(StdService):
         'bat']
     
     # conversion volume to mass according to Dr. Daniel Lehmann of Corant
+    # valid up to firmware version 1.74 only
     CONV_V_M = {
         'co':1.15,
         'no2':1.88,
         'o3':1.96,
         'so2':2.62}
+    # valid from firmware version 1.75 on
+    MOL_MASS = {
+        'co':28.01,
+        'no2':46.006,
+        'o3':47.997,
+        'so2':64.066}
         
     def __init__(self, engine, config_dict):
         super(AirqService,self).__init__(engine, config_dict)
@@ -351,6 +359,9 @@ class AirqService(StdService):
         if self.debug>0:
             self.log_success = True
             self.log_failure = True
+        # conversion between volume and mass
+        self.volume_mass_method = weeutil.weeutil.to_int(config_dict.get('airQ',{}).get('volume_mass_method',1))
+        loginf("volume_mass_method %s" % self.volume_mass_method)
         # dict of devices and threads
         self.threads={}
         # devices
@@ -411,6 +422,7 @@ class AirqService(StdService):
         self.threads[thread_name]['QFF_temperature_source'] = 'outTemp'
         self.threads[thread_name]['ppb&ppm'] = devconf.get('ppb&ppm',False)
         self.threads[thread_name]['RoomType'] = devconf.get('RoomType')
+        self.threads[thread_name]['state'] = {'init':'1'}
         # log settings for calculating the barometer value
         if self.isDeviceOutdoor(thread_name):
             loginf("device '%s' QFF calculation temperature source: airQ temperature reading" % thread_name)
@@ -462,6 +474,12 @@ class AirqService(StdService):
                             airqstate = json.loads(reply['Status'])
                             if 'Status' in airqstate:
                                 airqstate = airqstate['Status']
+                        if airqstate!=self.threads[ii]['state']:
+                            self.threads[ii]['state'] = airqstate
+                            if airqstate:
+                                logerr("thread '%s': state %s" % (ii,airqstate))
+                            else:
+                                loginf("thread '%s': state OK" % ii)
                     except (KeyError,ValueError,IndexError,TypeError):
                         airqstate = {}
                     # process values
@@ -479,7 +497,8 @@ class AirqService(StdService):
                             try:
                                 xx = self.AIRQ_DATA.get(jj)
                                 val = xx[3](reply[jj]) if xx is not None else reply[jj]
-                                if val<0.0: val = None
+                                if jj not in self.ACCUM_LAST:
+                                    if val<0.0: val = None
                             except (ValueError,TypeError,IndexError,KeyError) as e:
                                 val = None
                         #logdbg("val %s - %s - %s" % (jj,reply[jj],val))
@@ -540,11 +559,11 @@ class AirqService(StdService):
                     for vmobs in self.CONV_V_M:
                         if vmobs in data and vmobs in self.AIRQ_DATA:
                             data[vmobs+'_vol'] = data[vmobs]
-                            data[vmobs] = self.convert_to_m(ii,vmobs,data[vmobs])
+                            data[vmobs] = self.convert_to_m(ii,vmobs,data[vmobs],data.get('temperature'),data.get('pressure'))
                 else:
                     for vmobs in self.CONV_V_M:
                         if vmobs in data and vmobs in self.AIRQ_DATA:
-                            data[vmobs+'_vol'] = self.convert_to_v(ii,vmobs,data[vmobs])
+                            data[vmobs+'_vol'] = self.convert_to_v(ii,vmobs,data[vmobs],data.get('temperature'),data.get('pressure'))
                             logdbg("%s: mass %.3f vol %.3f" % (vmobs,data[vmobs],data[vmobs+'_vol']))
                             pass
             except (ValueError,TypeError,IndexError,KeyError) as e:
@@ -558,18 +577,27 @@ class AirqService(StdService):
             # log 
             if self.debug>=3: 
                 logdbg("PACKET %s" % data)
+            #loginf("PACKET %s" % data)
             # update loop packet with airQ data
             event.packet.update(data)
             
-    def convert_to_m(self, thread_name, obs, val):
+    def _volume_mass_factor(self, obs, temp, pressure):
+        """ conversion factor between mass and volume """
+        if not temp or not pressure or not self.volume_mass_method:
+            return self.CONV_V_M[obs]
+        return (self.MOL_MASS[obs]/22.4) * (273.15/(273.15+temp)) * (pressure/1013.25)
+    
+    def convert_to_m(self, thread_name, obs, val, temp, pressure):
         """ convert volume to mass """
+        if not val: return None
         if not self.threads[thread_name]['ppb&ppm']: return val
-        return self.CONV_V_M[obs] * val
-        
-    def convert_to_v(self, thread_name, obs, val):
+        return val * self._volume_mass_factor(obs, temp, pressure)
+    
+    def convert_to_v(self, thread_name, obs, val, temp, pressure):
         """ convert mass to volume """
+        if not val: return None
         if self.threads[thread_name]['ppb&ppm']: return val
-        return val / self.CONV_V_M[obs]
+        return val / self._volume_mass_factor(obs, temp, pressure)
 
     @staticmethod
     def obstype_with_prefix(obs_type,prefix):
