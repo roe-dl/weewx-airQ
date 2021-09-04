@@ -64,6 +64,9 @@ python3 -m Cryptodome.SelfTest
            ...
    ```
    
+   The section names can be any name. It need not be something like `[[first_device]]`. We recommend 
+   to use some reference to the location of the device like `[[bedroom]]`, `[[livingroom]]`, or the like.
+   
 5) restart weewx
 
    ```
