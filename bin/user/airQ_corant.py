@@ -38,7 +38,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = 0.8
+VERSION = "0.9b2"
 
 # imports for airQ
 import base64
@@ -95,6 +95,8 @@ else:
         class weeutil(object):
             def to_int(x):
                 return int(x)
+            def to_float(x):
+                return float(x)
     class Event(object):
         packet = { 'usUnits':16 }
     class Engine(object):
@@ -252,26 +254,30 @@ class AirqThread(threading.Thread):
     def run(self):
         """ run thread """
         loginf("thread '%s', host '%s': starting" % (self.name,self.address))
-        errsleep = 60
-        laststatuschange = time.time()
-        while self.running:
-            reply = airQget(self.address, '/data', self.passwd)
-            if reply['replystatus']==200:
-                if errsleep:
-                    if self.log_success:
-                        loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
-                    errsleep = 0
-                    laststatuschange = time.time()
-                self.queue.put(reply['content'])
-                time.sleep(self.query_interval)
-            else:
-                if errsleep==0: laststatuschange = time.time()
-                if self.log_failure:
-                    logerr("thread '%s', host '%s': %s - %s - %.0f s since last success" % (self.name,self.address,reply['replystatus'],reply['replyreason'],time.time()-laststatuschange))
-                # wait
-                time.sleep(errsleep)
-                if errsleep<300: errsleep+=60
-        loginf("thread '%s', host '%s': stopped" % (self.name,self.address))
+        try:
+            errsleep = 60
+            laststatuschange = time.time()
+            while self.running:
+                reply = airQget(self.address, '/data', self.passwd)
+                if reply['replystatus']==200:
+                    if errsleep:
+                        if self.log_success:
+                            loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,reply['replystatus'],reply['replyreason']))
+                        errsleep = 0
+                        laststatuschange = time.time()
+                    self.queue.put(reply['content'])
+                    time.sleep(self.query_interval)
+                else:
+                    if errsleep==0: laststatuschange = time.time()
+                    if self.log_failure:
+                        logerr("thread '%s', host '%s': %s - %s - %.0f s since last success" % (self.name,self.address,reply['replystatus'],reply['replyreason'],time.time()-laststatuschange))
+                    # wait
+                    time.sleep(errsleep)
+                    if errsleep<300: errsleep+=60
+        except Exception as e:
+            logerr("thread '%s', host '%s': %s" % (self.name,self.address,e))
+        finally:
+            loginf("thread '%s', host '%s': stopped" % (self.name,self.address))
         
 
 ##############################################################################
@@ -372,9 +378,9 @@ class AirqService(StdService):
                 if 'altitude' in config_dict['airQ'][device]:
                     __altitude = config_dict['airQ'][device]['altitude']
                     if len(__altitude)==3:
-                        __altitude = weewx.units.ValueTuple(__altitude[0],__altitude[1],__altitude[2])
+                        __altitude = weewx.units.ValueTuple(weeutil.weeutil.to_float(__altitude[0]),__altitude[1],__altitude[2])
                     else:
-                        __altitude = weewx.units.ValueTuple(__altitude[0],__altitude[1],'group_altitude')
+                        __altitude = weewx.units.ValueTuple(weeutil.weeutil.to_float(__altitude[0]),__altitude[1],'group_altitude')
                 else:
                     __altitude = engine.stn_info.altitude_vt
                 __altitude = weewx.units.convert(__altitude,'meter')[0]

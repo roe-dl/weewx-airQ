@@ -30,3 +30,7 @@
 * fixed bug that caused DeviceID, Status, and bat always to be None
 * DeviceID and Status in title bar
 * fixed bug in install.py thanks to Hartmut
+0.9b2 05Oct2021
+* some error handling improvements
+* fixed bug reading altitude in config, thanks to Hartmut
+* adapt to WeeWX 4.6.0b2 function style $gettext in --create-skin

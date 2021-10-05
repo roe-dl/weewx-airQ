@@ -342,7 +342,7 @@ def setConfig(config_dict, device, data):
 
 
 HTML_HEAD='''<!DOCTYPE html>
-<html lang="$gettext.lang">
+<html lang="%s">
   <head>
     <meta charset="UTF-8">
     <title>$station.location $page</title>
@@ -368,6 +368,15 @@ HTML_FOOT='''
 </html>
 '''
 
+def _check_gettext(seasons_skin_path):
+    """ check whether gettext """
+    with open(os.path.join(seasons_skin_path,'index.html.tmpl')) as f:
+        for line in f:
+            i = line.find('gettext')
+            if i>=0:
+                c = line[i+7]
+                if c in ('(','['): return c
+    return '?'
 
 def createSkin(config_path, config_dict, db_binding):
     """ create skin """
@@ -399,6 +408,13 @@ def createSkin(config_path, config_dict, db_binding):
     print("airQ skin path:    %s" % airq_skin_path)
     seasons_lang = config_dict['StdReport']['SeasonsReport'].get('lang')
     print("Seasons skin lang: %s" % seasons_lang)
+    gettext_style = _check_gettext(seasons_skin_path)
+    if gettext_style=='(':
+        print("gettext style: function")
+    elif gettext_style=='[':
+        print("gettext style: bracket")
+    else:
+        print("gettext style: unknown")
     if not os.path.isdir(airq_skin_path):
         os.mkdir(airq_skin_path)
         print("created '%s'" % airq_skin_path)
@@ -681,7 +697,7 @@ def createSkin(config_path, config_dict, db_binding):
         file.write(HTML_FOOT)
         print("  done.")
     for dev in config_dict['airQ'].sections:
-        create_template(config_dict['airQ'][dev],dev,airq_skin_path,sensors[dev],obstypes[dev])
+        create_template(config_dict['airQ'][dev],dev,airq_skin_path,sensors[dev],obstypes[dev],gettext_style)
 
 IMG_DICT = [
     ('barometer','pressure',['airqBarometer']),
@@ -716,19 +732,29 @@ def image_section(file, dev_dict, dev, zeit, sensors, obstypes, lang):
         file.write("""
 """)
 
-def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
+def _gettext_text(page, text, gettext_style):
+    if gettext_style not in ('(','['):
+        return text
+    if page is None:
+        cls = ')' if gettext_style=='(' else ']'
+        return '$gettext%s%s%s' % (gettext_style,text,cls)
+    if gettext_style=='[':
+        return '$gettext[%s][%s]' % (page,text)
+    return '$pgettext(%s,%s)' % (page,text)
+
+def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes, gettext_style):
     """ create html template """
     fn = dev+'.html.tmpl'
     fn = os.path.join(airq_skin_path,fn)
     print("creating %s" % fn)
     with open(fn,"w") as file:
-        file.write(HTML_HEAD % (obstype_with_prefix('airqDeviceID',dev_dict.get('prefix')),obstype_with_prefix('airqStatus',dev_dict.get('prefix'))))
+        file.write(HTML_HEAD % (_gettext_text(None,"'lang'",gettext_style),obstype_with_prefix('airqDeviceID',dev_dict.get('prefix')),obstype_with_prefix('airqStatus',dev_dict.get('prefix'))))
         file.write('''
     <div id="contents">
       <div id="widget_group">
 <div id='current_widget' class="widget">
   <div class="widget_title">
-    $gettext["Current Conditions"]
+    %s
     <a class="widget_control"
       onclick="toggle_widget('current')">&diams;</a>
   </div>
@@ -736,7 +762,7 @@ def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
   <div class="widget_contents">
   <table>
     <tbody>
-''')
+''' % _gettext_text(None,'"Current Conditions"',gettext_style))
         for img in IMG_DICT:
             if img[1] in sensors:
                 for obs in img[2]:
@@ -767,17 +793,25 @@ def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes):
         file.write('''
       <div id="plot_group">
         <div id="history_widget" class="widget">
-          <div id="plot_title" class="widget_title">$gettext[$page]["Plots"]:&nbsp;&nbsp;
+          <div id="plot_title" class="widget_title">%s:&nbsp;&nbsp;
+''' % _gettext_text(None,'"Plots"',gettext_style))
+        file.write('''
             <a class="button_selected" id="button_history_day"
-               onclick="choose_history('day')">$gettext["Day"]</a>
+               onclick="choose_history('day')">%s</a>
+''' % _gettext_text(None,'"Day"',gettext_style))
+        file.write('''
             <a class="button" id="button_history_week"
-               onclick="choose_history('week')">$gettext["Week"]</a>
+               onclick="choose_history('week')">%s</a>
+''' % _gettext_text(None,'"Week"',gettext_style))
+        file.write('''
             <a class="button" id="button_history_month"
-               onclick="choose_history('month')">$gettext["Month"]</a>
+               onclick="choose_history('month')">%s</a>
+''' % _gettext_text(None,'"Month"',gettext_style))
+        file.write('''
             <a class="button" id="button_history_year"
-               onclick="choose_history('year')">$gettext["Year"]</a>
+               onclick="choose_history('year')">%s</a>
           </div>
-''')
+''' % _gettext_text(None,'"Year"',gettext_style))
         for zeit in ('day','week','month','year'):
             file.write('''          <div id="history_%s" class="plot_container">
 ''' % zeit)

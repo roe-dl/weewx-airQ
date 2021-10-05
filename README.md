@@ -252,11 +252,16 @@ of `weewx.conf`.
         HTML_ROOT = /var/www/html/weewx/airQ
 ```
 
+The `lang` option must have the same value as it has for the Seasons
+skin.
+
 For observation types that are not saved to the database, no diagram
 can be created. In these cases the diagram is empty.
 
 **Note**: The language and unit system options are available from
-WeeWX version 4.6 alpha on, only.
+WeeWX version 4.6 alpha on, only. Starting with WeeWX version
+4.6 beta, the localization changed vom bracket to function style.
+That is automatically honored.
 
 Example:
 
