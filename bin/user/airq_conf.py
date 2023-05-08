@@ -357,11 +357,16 @@ HTML_HEAD='''<!DOCTYPE html>
         <p class="lastupdate">$current.dateTime</p>
       </div>
       <div id="reports">
-        ID: $current.%s.raw
-        <br/>
-        $current.%s.raw
-      </div>
+%s      </div>
     </div>
+'''
+HTML_HEAD_ID='''#if $current.%s.has_data
+        ID: $current.%s.raw
+#end if
+        <br/>
+#if $current.%s.has_data
+        $current.%s.raw
+#end if
 '''
 HTML_FOOT='''
   </body>
@@ -689,7 +694,7 @@ def createSkin(config_path, config_dict, db_binding):
     airqlang.close()
     print("creating %s" % os.path.join(airq_skin_path,'index.html.tmpl'))
     with open(os.path.join(airq_skin_path,'index.html.tmpl'),"w") as file:
-        file.write(HTML_HEAD)
+        file.write(HTML_HEAD % (_gettext_text(None,"'lang'",gettext_style),""))
         file.write('<ul>')
         for dev in config_dict['airQ'].sections:
             file.write('<li><a href="%s.html">%s</a></li>' % (dev,dev))
@@ -748,7 +753,8 @@ def create_template(dev_dict, dev, airq_skin_path, sensors, obstypes, gettext_st
     fn = os.path.join(airq_skin_path,fn)
     print("creating %s" % fn)
     with open(fn,"w") as file:
-        file.write(HTML_HEAD % (_gettext_text(None,"'lang'",gettext_style),obstype_with_prefix('airqDeviceID',dev_dict.get('prefix')),obstype_with_prefix('airqStatus',dev_dict.get('prefix'))))
+        id_txt = HTML_HEAD_ID % (obstype_with_prefix('airqDeviceID',dev_dict.get('prefix')),obstype_with_prefix('airqDeviceID',dev_dict.get('prefix')),obstype_with_prefix('airqStatus',dev_dict.get('prefix')),obstype_with_prefix('airqStatus',dev_dict.get('prefix')))
+        file.write(HTML_HEAD % (_gettext_text(None,"'lang'",gettext_style),id_txt))
         file.write('''
     <div id="contents">
       <div id="widget_group">

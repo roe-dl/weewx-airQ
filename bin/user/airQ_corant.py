@@ -38,7 +38,7 @@ Configuration in weewx.conf:
 
 """
 
-VERSION = "0.9b2"
+VERSION = "0.9b3"
 
 # imports for airQ
 import base64
@@ -247,7 +247,7 @@ class AirqThread(threading.Thread):
         self.running = True
         loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
         
-    def shutdown(self):
+    def shutDown(self):
         """ stop thread """
         self.running = False
         
@@ -453,10 +453,35 @@ class AirqService(StdService):
         self.threads[thread_name]['thread'].start()
         return True
             
-    def shutdown(self):
+    def shutDown(self):
         for ii in self.threads:
-            loginf("shutting down connection to '%s'" % ii)
-            self.threads[ii]['thread'].shutdown()
+            try:
+                loginf("shutting down connection to '%s'" % ii)
+                self.threads[ii]['thread'].shutDown()
+            except:
+                pass
+        # wait at max 10 seconds for shutdown to complete
+        timeout = time.time()+10
+        for ii in self.threads:
+            try:
+                w = timeout-time.time()
+                if w<=0: break
+                self.threads[ii]['thread'].join(w)
+                if self.threads[ii]['thread'].is_alive():
+                    logerr("unable to shutdown thread '%s'" % self.threads[ii]['thread'].name)
+            except:
+                pass
+        # report threads that are still alive
+        _threads = [ii for ii in self.threads]
+        for ii in _threads:
+            try:
+                if self.threads[ii]['thread'].is_alive():
+                    logerr("unable to shutdown thread '%s'" % self.threads[ii]['thread'].name)
+                del self.threads[ii]['thread']
+                del self.threads[ii]['queue']
+                del self.threads[ii]
+            except:
+                pass
         
     def new_loop_packet(self, event):
         for ii in self.threads:
