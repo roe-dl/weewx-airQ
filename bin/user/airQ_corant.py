@@ -390,7 +390,7 @@ class AirqService(StdService):
                     config_dict['airQ'][device].get('password'),
                     config_dict['airQ'][device].get('prefix'),
                     __altitude,
-                    config_dict['airQ'][device].get('query_interval',config_dict['airQ'].get('query_interval',5.0))):
+                    weeutil.weeutil.to_float(config_dict['airQ'][device].get('query_interval',config_dict['airQ'].get('query_interval',5.0)))):
                     ct+=1
             if ct>0:
                 self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)

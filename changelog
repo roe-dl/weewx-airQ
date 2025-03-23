@@ -36,3 +36,4 @@
 * adapt to WeeWX 4.6.0b2 function style $gettext in --create-skin
 0.9b3
 * fix shutdown
+* fix query interval data type
